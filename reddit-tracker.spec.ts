@@ -138,21 +138,20 @@ test('scrape reddit coding agent stats', async () => {
   // Print ranking
   console.log('\n======= RANKING =======');
   sorted.forEach(({ subreddit, visitors, contributions }, i) => {
-    const engagement = visitors > 0 ? ((contributions / visitors) * 100).toFixed(2) : '0.00';
     console.log(
-      `#${i + 1} r/${subreddit.padEnd(20)} members: ${String(members[subreddit] ?? 0).padStart(7)} | visitors: ${String(visitors).padStart(7)} | contributions: ${String(contributions).padStart(6)} | engagement: ${engagement}%`
+      `#${i + 1} r/${subreddit.padEnd(20)} members: ${String(members[subreddit] ?? 0).padStart(7)} | visitors: ${String(visitors).padStart(7)} | contributions: ${String(contributions).padStart(6)}`
     );
   });
 
   // Append to CSV
   const csvExists = fs.existsSync(OUTPUT_FILE);
+  const needsHeader = !csvExists || fs.statSync(OUTPUT_FILE).size === 0;
   const stream = fs.createWriteStream(OUTPUT_FILE, { flags: 'a' });
-  if (!csvExists) {
-    stream.write('date,subreddit,members,visitors,contributions,engagement_pct\n');
+  if (needsHeader) {
+    stream.write('date,subreddit,members,visitors,contributions\n');
   }
   for (const { subreddit, visitors, contributions } of sorted) {
-    const engagement = visitors > 0 ? ((contributions / visitors) * 100).toFixed(2) : '0.00';
-    stream.write(`${date},${subreddit},${members[subreddit] ?? 0},${visitors},${contributions},${engagement}\n`);
+    stream.write(`${date},${subreddit},${members[subreddit] ?? 0},${visitors},${contributions}\n`);
   }
   stream.end();
 
