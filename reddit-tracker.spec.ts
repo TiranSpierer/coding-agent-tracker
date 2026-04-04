@@ -56,13 +56,13 @@ test('scrape reddit coding agent stats', async () => {
   });
 
   // Scrape sequentially to avoid Reddit bot detection
-  const scraped: { subreddit: string; visitors: number; contributions: number }[] = [];
+  const scraped: { subreddit: string; weekly_visitors: number; weekly_contributions: number }[] = [];
 
   for (const subreddit of SUBREDDITS) {
     console.log(`\nFetching r/${subreddit}...`);
     
-    let visitorsVal = 0;
-    let contributionsVal = 0;
+    let weeklyVisitorsVal = 0;
+    let weeklyContributionsVal = 0;
     let attempts = 0;
     const maxAttempts = 3;
 
@@ -90,14 +90,14 @@ test('scrape reddit coding agent stats', async () => {
 
         await page.waitForSelector('shreddit-subreddit-header', { timeout: 15000 });
 
-        const visitorsAttr = await page.getAttribute('shreddit-subreddit-header', 'weekly-active-users');
-        const contributionsAttr = await page.getAttribute('shreddit-subreddit-header', 'weekly-contributions');
+        const weeklyVisitorsAttr = await page.getAttribute('shreddit-subreddit-header', 'weekly-active-users');
+        const weeklyContributionsAttr = await page.getAttribute('shreddit-subreddit-header', 'weekly-contributions');
 
-        visitorsVal = parseNumber(visitorsAttr);
-        contributionsVal = parseNumber(contributionsAttr);
+        weeklyVisitorsVal = parseNumber(weeklyVisitorsAttr);
+        weeklyContributionsVal = parseNumber(weeklyContributionsAttr);
 
-        if (visitorsVal > 0 || contributionsVal > 0) {
-          console.log(`  ✓ visitors: ${visitorsAttr || 0} | contributions: ${contributionsAttr || 0}`);
+        if (weeklyVisitorsVal > 0 || weeklyContributionsVal > 0) {
+          console.log(`  ✓ weekly_visitors: ${weeklyVisitorsAttr || 0} | weekly_contributions: ${weeklyContributionsAttr || 0}`);
           await page.close();
           break;
         } else {
@@ -117,11 +117,11 @@ test('scrape reddit coding agent stats', async () => {
       }
     }
 
-    if (visitorsVal === 0 && contributionsVal === 0) {
+    if (weeklyVisitorsVal === 0 && weeklyContributionsVal === 0) {
       console.log(`  ✗ failed to get stats for r/${subreddit} after ${maxAttempts} attempts`);
     }
 
-    scraped.push({ subreddit, visitors: visitorsVal, contributions: contributionsVal });
+    scraped.push({ subreddit, weekly_visitors: weeklyVisitorsVal, weekly_contributions: weeklyContributionsVal });
 
     // Random delay between requests to avoid bot detection
     await new Promise(r => setTimeout(r, 1000 + Math.random() * 2000));
@@ -133,13 +133,13 @@ test('scrape reddit coding agent stats', async () => {
   const members = await membersPromise;
 
   // Sort by visitors descending
-  const sorted = scraped.sort((a, b) => b.visitors - a.visitors);
+  const sorted = scraped.sort((a, b) => b.weekly_visitors - a.weekly_visitors);
 
   // Print ranking
   console.log('\n======= RANKING =======');
-  sorted.forEach(({ subreddit, visitors, contributions }, i) => {
+  sorted.forEach(({ subreddit, weekly_visitors, weekly_contributions }, i) => {
     console.log(
-      `#${i + 1} r/${subreddit.padEnd(20)} members: ${String(members[subreddit] ?? 0).padStart(7)} | visitors: ${String(visitors).padStart(7)} | contributions: ${String(contributions).padStart(6)}`
+      `#${i + 1} r/${subreddit.padEnd(20)} members: ${String(members[subreddit] ?? 0).padStart(7)} | weekly_visitors: ${String(weekly_visitors).padStart(7)} | weekly_contributions: ${String(weekly_contributions).padStart(6)}`
     );
   });
 
@@ -148,10 +148,10 @@ test('scrape reddit coding agent stats', async () => {
   const needsHeader = !csvExists || fs.statSync(OUTPUT_FILE).size === 0;
   const stream = fs.createWriteStream(OUTPUT_FILE, { flags: 'a' });
   if (needsHeader) {
-    stream.write('date,subreddit,members,visitors,contributions\n');
+    stream.write('date,subreddit,members,weekly_visitors,weekly_contributions\n');
   }
-  for (const { subreddit, visitors, contributions } of sorted) {
-    stream.write(`${date},${subreddit},${members[subreddit] ?? 0},${visitors},${contributions}\n`);
+  for (const { subreddit, weekly_visitors, weekly_contributions } of sorted) {
+    stream.write(`${date},${subreddit},${members[subreddit] ?? 0},${weekly_visitors},${weekly_contributions}\n`);
   }
   stream.end();
 
