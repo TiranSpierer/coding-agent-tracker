@@ -44,7 +44,8 @@ async function fetchSubscribers(): Promise<Record<string, number>> {
 test('scrape reddit coding agent stats', async () => {
   test.setTimeout(120_000);
 
-  const date = new Date().toISOString().split('T')[0];
+  // Get current date in Israel time using formatting (YYYY-MM-DD)
+  const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
 
   // Fire off all API subscriber calls immediately (these are fine in parallel)
   const membersPromise = fetchSubscribers();
