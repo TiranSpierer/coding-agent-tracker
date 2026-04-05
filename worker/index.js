@@ -39,6 +39,10 @@ async function fetchRedditPage(sub) {
     return challengeHtml; // No challenge, lucky
   }
 
+  // Use the final URL after any redirects (e.g. /r/Cline/ → /r/CLine/)
+  // The challenge cookies and token are bound to the canonical URL
+  const canonicalUrl = challengeRes.url || pageUrl;
+
   // Extract the challenge input
   const challengeMatch = challengeHtml.match(/\("([0-9a-f]+)"\)/);
   if (!challengeMatch) return challengeHtml;
@@ -51,11 +55,11 @@ async function fetchRedditPage(sub) {
     .map(c => c.split(';')[0])
     .join('; ');
 
-  // Step 2: Submit solution with cookies and Referer
-  const solvedRes = await fetch(`${pageUrl}?solution=${solution}`, {
+  // Step 2: Submit solution with cookies and Referer using the canonical URL
+  const solvedRes = await fetch(`${canonicalUrl}?solution=${solution}`, {
     headers: {
       ...BROWSER_HEADERS,
-      'Referer': pageUrl,
+      'Referer': canonicalUrl,
       'Cookie': cookies,
     },
     redirect: 'follow',

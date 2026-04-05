@@ -5,12 +5,13 @@ import * as dotenv from 'dotenv';
 
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
+// Use canonical subreddit names (exact casing) to avoid redirects that break challenge solving
 const SUBREDDITS = [
   'ClaudeCode',
-  'Cline',
+  'CLine',
   'cursor',
   'windsurf',
-  'githubcopilot',
+  'GithubCopilot',
   'google_antigravity',
   'codex',
 ];

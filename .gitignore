@@ -6,3 +6,4 @@ playwright-report/
 Thumbs.db
 Desktop.ini
 .env
+.reddit-state.json
