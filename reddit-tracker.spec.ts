@@ -144,17 +144,20 @@ test('scrape reddit coding agent stats', async () => {
     );
   });
 
-  // Append to CSV
-  const csvExists = fs.existsSync(OUTPUT_FILE);
-  const needsHeader = !csvExists || fs.statSync(OUTPUT_FILE).size === 0;
-  const stream = fs.createWriteStream(OUTPUT_FILE, { flags: 'a' });
-  if (needsHeader) {
-    stream.write('date,subreddit,members,weekly_visitors,weekly_contributions\n');
+  // Build new rows
+  const newRows = sorted.map(({ subreddit, weekly_visitors, weekly_contributions }) =>
+    `${date},${subreddit},${members[subreddit] ?? 0},${weekly_visitors},${weekly_contributions}`
+  );
+
+  // Read existing CSV, filter out rows from the same date, then append new rows
+  const header = 'date,subreddit,members,weekly_visitors,weekly_contributions';
+  let existingRows: string[] = [];
+  if (fs.existsSync(OUTPUT_FILE)) {
+    const lines = fs.readFileSync(OUTPUT_FILE, 'utf-8').split('\n').filter(Boolean);
+    existingRows = lines.filter(line => line !== header && !line.startsWith(`${date},`));
   }
-  for (const { subreddit, weekly_visitors, weekly_contributions } of sorted) {
-    stream.write(`${date},${subreddit},${members[subreddit] ?? 0},${weekly_visitors},${weekly_contributions}\n`);
-  }
-  stream.end();
+
+  fs.writeFileSync(OUTPUT_FILE, [header, ...existingRows, ...newRows].join('\n') + '\n');
 
   console.log(`\n✓ Stats appended to ${OUTPUT_FILE}`);
 });
