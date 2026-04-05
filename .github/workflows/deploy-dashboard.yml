@@ -28,6 +28,7 @@ jobs:
           sparse-checkout: |
             index.html
             reddit-stats.csv
+          sparse-checkout-cone-mode: false
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
