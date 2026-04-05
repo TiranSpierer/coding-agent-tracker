@@ -27,26 +27,33 @@ Detailed data flow and endpoint docs: `docs/ARCHITECTURE.md`
 
 ## Dev workflow
 
+**Do NOT commit or push without explicit user approval.** Always test first, show the user the results, and wait for them to say to commit.
+
 1. **Always branch.** Create a feature branch before making changes: `git checkout -b feat/description`
-2. **Test locally first:**
+2. **Run the Worker locally** (no need to deploy during development):
+   ```bash
+   cd worker && npx wrangler dev    # runs at http://localhost:8787
+   ```
+   The scraper defaults to `localhost:8787` when `REDDIT_PROXY_URL` isn't set, so no `.env` needed for local dev.
+3. **Test the scraper** (in a separate terminal):
    ```bash
    npm run scrape
    ```
-   Requires `REDDIT_PROXY_URL` in `.env` pointing to the deployed Worker.
-3. **If you changed `worker/index.js`, redeploy before testing:**
+4. **Show results to the user and wait for approval before any git operations.**
+5. **Only deploy the Worker when changes are final:**
    ```bash
    cd worker && npx wrangler deploy
    ```
-4. **Test in CI:**
+6. **Test in CI:**
    ```bash
    gh workflow run "Reddit Stats Tracker" --ref your-branch-name
    gh run watch          # watch the latest run
    ```
-5. **Check CI logs for issues:**
+7. **Check CI logs for issues:**
    ```bash
    gh run view <run-id> --log | grep "members="
    ```
-6. **Merge to main when CI passes, then push:**
+8. **Merge to main when CI passes:**
    ```bash
    git checkout main && git merge your-branch --no-edit && git push
    ```
