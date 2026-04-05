@@ -90,8 +90,9 @@
       border-radius: 12px;
       padding: 1.5rem;
       position: relative;
+      height: 60vh;
+      min-height: 300px;
     }
-    canvas { width: 100% !important; }
     .loading {
       text-align: center;
       padding: 4rem;
@@ -210,6 +211,7 @@
           data: { labels: dates, datasets },
           options: {
             responsive: true,
+            maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
               legend: { display: false },
@@ -285,8 +287,18 @@
         buildAgentToggles();
 
         document.getElementById('metric').addEventListener('change', updateChart);
-        document.getElementById('dateFrom').addEventListener('change', updateChart);
-        document.getElementById('dateTo').addEventListener('change', updateChart);
+        document.getElementById('dateFrom').addEventListener('change', () => {
+          const from = document.getElementById('dateFrom');
+          if (from.value < allDates[0]) from.value = allDates[0];
+          if (from.value > document.getElementById('dateTo').value) from.value = document.getElementById('dateTo').value;
+          updateChart();
+        });
+        document.getElementById('dateTo').addEventListener('change', () => {
+          const to = document.getElementById('dateTo');
+          if (to.value > allDates[allDates.length - 1]) to.value = allDates[allDates.length - 1];
+          if (to.value < document.getElementById('dateFrom').value) to.value = document.getElementById('dateFrom').value;
+          updateChart();
+        });
 
         updateChart();
       } catch (err) {

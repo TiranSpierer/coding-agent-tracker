@@ -2,7 +2,9 @@
   "name": "coding-agent-tracker",
   "version": "1.0.0",
   "scripts": {
-    "scrape": "tsx src/scraper.ts"
+    "scrape": "tsx src/scraper.ts",
+    "ci:scrape": "gh workflow run 'Reddit Stats Tracker' | tee /dev/stderr | grep -o '[0-9]*$' | xargs gh run watch",
+    "ci:deploy": "gh workflow run 'Deploy Dashboard' | tee /dev/stderr | grep -o '[0-9]*$' | xargs gh run watch"
   },
   "devDependencies": {
     "@types/node": "^25.0.0",
