@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
 
-dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 // Use canonical subreddit names (exact casing) to avoid redirects that break challenge solving
 const SUBREDDITS = [
@@ -16,7 +16,7 @@ const SUBREDDITS = [
   'codex',
 ];
 
-const OUTPUT_FILE = path.resolve(__dirname, 'reddit-stats.csv');
+const OUTPUT_FILE = path.resolve(__dirname, '..', 'reddit-stats.csv');
 const WORKER_URL = process.env.REDDIT_PROXY_URL || 'http://localhost:8787';
 
 type SubredditStats = {
@@ -33,8 +33,6 @@ async function fetchSubredditStats(sub: string): Promise<SubredditStats> {
 }
 
 test('scrape reddit coding agent stats', async () => {
-  test.setTimeout(60_000);
-
   const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
 
   console.log(`Fetching stats for ${SUBREDDITS.length} subreddits via worker...`);

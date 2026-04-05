@@ -7,3 +7,4 @@ Thumbs.db
 Desktop.ini
 .env
 .reddit-state.json
+worker/.wrangler/

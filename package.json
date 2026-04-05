@@ -2,13 +2,11 @@
   "name": "coding-agent-tracker",
   "version": "1.0.0",
   "scripts": {
-    "scrape": "playwright test reddit-tracker.spec.ts"
+    "scrape": "playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.0.0",
-    "@types/node": "^25.0.0"
-  },
-  "dependencies": {
+    "@types/node": "^25.0.0",
     "dotenv": "^17.4.0"
   }
 }

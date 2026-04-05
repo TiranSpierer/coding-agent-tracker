@@ -1,9 +1,9 @@
 name: Reddit Stats Tracker
 
 on:
-  # schedule:
-  #   - cron: '0 0 * * 6' # 00:00 UTC Saturday (2 AM Israel Standard Time)
-  workflow_dispatch: # Manual trigger from GitHub UI
+  schedule:
+    - cron: '0 0 * * 6' # 00:00 UTC Saturday (2 AM Israel Standard Time)
+  workflow_dispatch:
 
 jobs:
   scrape:
@@ -24,7 +24,7 @@ jobs:
         run: npm ci
 
       - name: Run scraper
-        run: npx playwright test reddit-tracker.spec.ts --reporter=line
+        run: npm run scrape
         env:
           REDDIT_PROXY_URL: ${{ secrets.REDDIT_PROXY_URL }}
 

@@ -7,10 +7,10 @@ Tracks **members**, **weekly visitors**, and **weekly contributions** across sub
 | Subreddit | Agent |
 |---|---|
 | r/ClaudeCode | Claude Code |
-| r/Cline | Cline |
+| r/CLine | Cline |
 | r/cursor | Cursor |
 | r/windsurf | Windsurf |
-| r/githubcopilot | GitHub Copilot |
+| r/GithubCopilot | GitHub Copilot |
 | r/google_antigravity | Antigravity |
 | r/codex | Codex |
 
@@ -48,3 +48,7 @@ npm run scrape
 ```
 
 Results are appended to `reddit-stats.csv`.
+
+## Automation
+
+A GitHub Actions workflow runs every Saturday at 00:00 UTC, scraping stats and auto-committing the updated CSV.
