@@ -2,7 +2,7 @@ name: Reddit Stats Tracker
 
 on:
   schedule:
-    - cron: '0 0 * * 6' # 00:00 UTC Saturday (2 AM Israel Standard Time)
+    - cron: '0 0 * * *' # 00:00 UTC daily (3 AM Israel Daylight Time)
   workflow_dispatch:
 
 jobs:
@@ -31,5 +31,5 @@ jobs:
       - name: Commit and push results
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "chore: weekly Reddit stats ${{ github.run_id }}"
+          commit_message: "chore: daily Reddit stats ${{ github.run_id }}"
           file_pattern: reddit-stats.csv

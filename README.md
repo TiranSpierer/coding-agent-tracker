@@ -14,28 +14,25 @@ Tracks **members**, **weekly visitors**, and **weekly contributions** across sub
 | r/google_antigravity | Antigravity |
 | r/codex | Codex |
 
+Data is collected every Saturday via GitHub Actions and stored in `reddit-stats.csv`.
+
 ## Setup
 
 ```bash
 npm install
-```
-
-Copy `.env.example` to `.env` and set the worker URL:
-
-```bash
 cp .env.example .env
 ```
 
-### Cloudflare Worker (required for CI)
+Set `REDDIT_PROXY_URL` in `.env` to the deployed Cloudflare Worker URL.
 
-The scraper uses a Cloudflare Worker proxy to bypass Reddit's datacenter IP blocking. Deploy it once:
+### Deploy the Worker (one-time)
 
 ```bash
 cd worker
 npx wrangler deploy
 ```
 
-Set the deployed URL in `.env` and as a GitHub Actions secret:
+Then set the URL as a GitHub Actions secret:
 
 ```bash
 gh secret set REDDIT_PROXY_URL -b "https://reddit-stats-proxy.<your-subdomain>.workers.dev"
@@ -46,9 +43,3 @@ gh secret set REDDIT_PROXY_URL -b "https://reddit-stats-proxy.<your-subdomain>.w
 ```bash
 npm run scrape
 ```
-
-Results are appended to `reddit-stats.csv`.
-
-## Automation
-
-A GitHub Actions workflow runs every Saturday at 00:00 UTC, scraping stats and auto-committing the updated CSV.
