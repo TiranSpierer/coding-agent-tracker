@@ -14,7 +14,9 @@ Tracks **members**, **weekly visitors**, and **weekly contributions** across sub
 | r/google_antigravity | Antigravity |
 | r/codex | Codex |
 
-Data is collected every Saturday via GitHub Actions and stored in `reddit-stats.csv`.
+Data is collected daily via GitHub Actions and stored in `reddit-stats.csv`.
+
+**[Live Dashboard](https://tiranspierer.github.io/coding-agent-tracker/)** — interactive chart with metric/agent/date filters.
 
 ## Setup
 

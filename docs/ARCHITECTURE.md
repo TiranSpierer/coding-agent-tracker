@@ -61,8 +61,9 @@ To find a subreddit's canonical name: visit `reddit.com/r/name` and check the UR
 | `src/scraper.ts` | Main scraper script, run with `tsx` |
 | `worker/index.js` | Cloudflare Worker proxy |
 | `worker/wrangler.toml` | Worker deployment config |
+| `index.html` | Dashboard (Chart.js), served via GitHub Pages |
 | `reddit-stats.csv` | Output data (auto-committed by CI) |
-| `.github/workflows/reddit-tracker.yml` | Weekly cron + manual trigger |
+| `.github/workflows/reddit-tracker.yml` | Daily cron + manual trigger |
 | `.env` / `.env.example` | `REDDIT_PROXY_URL` for local runs |
 | `docs/ARCHITECTURE.md` | This file |
 | `docs/TROUBLESHOOTING.md` | When things break |

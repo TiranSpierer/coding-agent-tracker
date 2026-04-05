@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project does
 
-Scrapes weekly Reddit stats (members, visitors, contributions) for 7 coding-agent subreddits via a Cloudflare Worker proxy, stores results in CSV. Runs autonomously every Saturday via GitHub Actions.
+Scrapes daily Reddit stats (members, visitors, contributions) for 7 coding-agent subreddits via a Cloudflare Worker proxy, stores results in CSV. Runs autonomously every day via GitHub Actions. Dashboard at GitHub Pages.
 
 ## Architecture
 
@@ -14,6 +14,7 @@ src/scraper.ts (tsx) → CF Worker (worker/index.js) → reddit.com → parse HT
 
 - **`src/scraper.ts`** — Orchestrator. Calls the Worker for each subreddit in parallel, retries failures, writes `reddit-stats.csv`. Run with `tsx` (no test framework).
 - **`worker/index.js`** — Cloudflare Worker proxy. Solves Reddit's JS bot challenge, parses `<shreddit-subreddit-header>` for weekly stats, fetches `about.json` (with session cookies) for member count.
+- **`index.html`** — Static dashboard (Chart.js). Reads CSV client-side. Served via GitHub Pages.
 - **Why a Worker?** Reddit blocks all GitHub Actions datacenter IPs. CF Workers run on edge IPs that aren't blocked.
 
 Detailed data flow and endpoint docs: `docs/ARCHITECTURE.md`
@@ -22,7 +23,8 @@ Detailed data flow and endpoint docs: `docs/ARCHITECTURE.md`
 
 - **Subreddit casing matters.** Names in `src/scraper.ts` MUST use exact canonical casing (`CLine` not `Cline`, `GithubCopilot` not `githubcopilot`). Wrong casing triggers redirects that break the Worker's challenge-solving flow.
 - **Any zero = failure.** The scraper exits code 1 if any stat is 0 for any subreddit. This is intentional — it triggers CI failure + email alert. Don't weaken this check.
-- **CSV at project root.** Must stay there — GitHub Actions auto-commit targets `reddit-stats.csv`.
+- **CSV at project root.** Must stay there — GitHub Actions auto-commit targets `reddit-stats.csv`, and `index.html` fetches it via relative path.
+- **`index.html` at project root.** GitHub Pages serves from root of main branch. The chart reads `reddit-stats.csv` from the same directory.
 - **No cache on the Worker.** Each request hits Reddit fresh.
 
 ## Dev workflow
