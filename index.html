@@ -287,18 +287,8 @@
         buildAgentToggles();
 
         document.getElementById('metric').addEventListener('change', updateChart);
-        document.getElementById('dateFrom').addEventListener('change', () => {
-          const from = document.getElementById('dateFrom');
-          if (from.value < allDates[0]) from.value = allDates[0];
-          if (from.value > document.getElementById('dateTo').value) from.value = document.getElementById('dateTo').value;
-          updateChart();
-        });
-        document.getElementById('dateTo').addEventListener('change', () => {
-          const to = document.getElementById('dateTo');
-          if (to.value > allDates[allDates.length - 1]) to.value = allDates[allDates.length - 1];
-          if (to.value < document.getElementById('dateFrom').value) to.value = document.getElementById('dateFrom').value;
-          updateChart();
-        });
+        document.getElementById('dateFrom').addEventListener('change', updateChart);
+        document.getElementById('dateTo').addEventListener('change', updateChart);
 
         updateChart();
       } catch (err) {
