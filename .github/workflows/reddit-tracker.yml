@@ -21,11 +21,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright browsers
-        run: npx playwright install chromium --with-deps
-
       - name: Run scraper
         run: npx playwright test reddit-tracker.spec.ts --reporter=line
+        env:
+          REDDIT_PROXY_URL: ${{ secrets.REDDIT_PROXY_URL }}
 
       - name: Commit and push results
         uses: stefanzweifel/git-auto-commit-action@v5
