@@ -1,6 +1,9 @@
 import { test } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as dotenv from 'dotenv';
+
+dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const SUBREDDITS = [
   'ClaudeCode',
