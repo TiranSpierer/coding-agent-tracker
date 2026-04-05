@@ -95,6 +95,15 @@ async function main() {
   fs.writeFileSync(OUTPUT_FILE, [header, ...existingRows, ...newRows].join('\n') + '\n');
 
   console.log(`\n✓ Stats appended to ${OUTPUT_FILE}`);
+
+  // Fail if any subreddit has a zero in any stat — means Reddit changed something
+  const broken = sorted.filter(r => r.members === 0 || r.weekly_visitors === 0 || r.weekly_contributions === 0);
+  if (broken.length > 0) {
+    console.error(`\n✗ ERROR: ${broken.length} subreddit(s) have zero stats:`);
+    broken.forEach(r => console.error(`  - r/${r.subreddit}: members=${r.members} visitors=${r.weekly_visitors} contributions=${r.weekly_contributions}`));
+    console.error('\nReddit likely changed their challenge or blocked the Worker. See docs/ARCHITECTURE.md for troubleshooting.');
+    process.exit(1);
+  }
 }
 
 main();
