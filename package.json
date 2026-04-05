@@ -2,11 +2,11 @@
   "name": "coding-agent-tracker",
   "version": "1.0.0",
   "scripts": {
-    "scrape": "playwright test"
+    "scrape": "tsx src/scraper.ts"
   },
   "devDependencies": {
-    "@playwright/test": "^1.0.0",
     "@types/node": "^25.0.0",
-    "dotenv": "^17.4.0"
+    "dotenv": "^17.4.0",
+    "tsx": "^4.21.0"
   }
 }

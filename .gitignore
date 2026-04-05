@@ -1,6 +1,4 @@
 node_modules/
-test-results/
-playwright-report/
 *.bak
 .DS_Store
 Thumbs.db

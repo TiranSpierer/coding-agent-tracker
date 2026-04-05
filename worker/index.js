@@ -27,35 +27,30 @@ function parseHeaderTag(html) {
 /**
  * Reddit serves a JS challenge: (async e => e+e)("hex").
  * Solve it, then re-fetch with cookies + Referer to get the real page.
+ * Returns { html, cookies } so cookies can be reused for about.json.
  */
 async function fetchRedditPage(sub) {
   const pageUrl = `https://www.reddit.com/r/${sub}/`;
 
-  // Step 1: Hit the page, get the challenge + cookies
   const challengeRes = await fetch(pageUrl, { headers: BROWSER_HEADERS, redirect: 'follow' });
   const challengeHtml = await challengeRes.text();
 
   if (!challengeHtml.includes('Please wait for verification')) {
-    return challengeHtml; // No challenge, lucky
+    return { html: challengeHtml, cookies: '' };
   }
 
-  // Use the final URL after any redirects (e.g. /r/Cline/ → /r/CLine/)
-  // The challenge cookies and token are bound to the canonical URL
   const canonicalUrl = challengeRes.url || pageUrl;
 
-  // Extract the challenge input
   const challengeMatch = challengeHtml.match(/\("([0-9a-f]+)"\)/);
-  if (!challengeMatch) return challengeHtml;
+  if (!challengeMatch) return { html: challengeHtml, cookies: '' };
 
   const input = challengeMatch[1];
-  const solution = input + input; // (async e => e+e) pattern
+  const solution = input + input;
 
-  // Collect cookies from the challenge response
   const cookies = challengeRes.headers.getAll('set-cookie')
     .map(c => c.split(';')[0])
     .join('; ');
 
-  // Step 2: Submit solution with cookies and Referer using the canonical URL
   const solvedRes = await fetch(`${canonicalUrl}?solution=${solution}`, {
     headers: {
       ...BROWSER_HEADERS,
@@ -65,15 +60,23 @@ async function fetchRedditPage(sub) {
     redirect: 'follow',
   });
 
-  return await solvedRes.text();
+  // Merge cookies from both responses
+  const solvedCookies = solvedRes.headers.getAll('set-cookie')
+    .map(c => c.split(';')[0])
+    .join('; ');
+  const allCookies = [cookies, solvedCookies].filter(Boolean).join('; ');
+
+  return { html: await solvedRes.text(), cookies: allCookies };
 }
 
 async function fetchSubredditStats(sub) {
   let members = 0, weekly_visitors = 0, weekly_contributions = 0;
+  let sessionCookies = '';
 
-  // Strategy 1: Fetch page HTML (solving challenge) for weekly stats
+  // Fetch page HTML (solving challenge) for weekly stats
   try {
-    const html = await fetchRedditPage(sub);
+    const { html, cookies } = await fetchRedditPage(sub);
+    sessionCookies = cookies;
     const stats = parseHeaderTag(html);
     if (stats) {
       weekly_visitors = stats.weekly_visitors;
@@ -81,7 +84,7 @@ async function fetchSubredditStats(sub) {
     }
   } catch {}
 
-  // Strategy 2: about.json for subscribers
+  // about.json for subscriber count (try without cookies first, then with)
   try {
     const res = await fetch(`https://www.reddit.com/r/${sub}/about.json`, {
       headers: { 'User-Agent': BROWSER_HEADERS['User-Agent'] },
@@ -89,6 +92,16 @@ async function fetchSubredditStats(sub) {
     const json = await res.json();
     members = json?.data?.subscribers ?? 0;
   } catch {}
+
+  if (members === 0 && sessionCookies) {
+    try {
+      const res = await fetch(`https://www.reddit.com/r/${sub}/about.json`, {
+        headers: { 'User-Agent': BROWSER_HEADERS['User-Agent'], 'Cookie': sessionCookies },
+      });
+      const json = await res.json();
+      members = json?.data?.subscribers ?? 0;
+    } catch {}
+  }
 
   return { subreddit: sub, members, weekly_visitors, weekly_contributions };
 }
@@ -108,10 +121,7 @@ export default {
     const stats = await fetchSubredditStats(sub);
 
     return new Response(JSON.stringify(stats), {
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=3600',
-      },
+      headers: { 'Content-Type': 'application/json' },
     });
   },
 };

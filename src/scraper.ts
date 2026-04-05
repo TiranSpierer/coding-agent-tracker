@@ -1,4 +1,3 @@
-import { test } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
@@ -32,7 +31,7 @@ async function fetchSubredditStats(sub: string): Promise<SubredditStats> {
   return await res.json() as SubredditStats;
 }
 
-test('scrape reddit coding agent stats', async () => {
+async function main() {
   const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
 
   console.log(`Fetching stats for ${SUBREDDITS.length} subreddits via worker...`);
@@ -96,4 +95,6 @@ test('scrape reddit coding agent stats', async () => {
   fs.writeFileSync(OUTPUT_FILE, [header, ...existingRows, ...newRows].join('\n') + '\n');
 
   console.log(`\n✓ Stats appended to ${OUTPUT_FILE}`);
-});
+}
+
+main();
