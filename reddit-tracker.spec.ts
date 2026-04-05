@@ -1,4 +1,8 @@
-import { test, chromium } from '@playwright/test';
+import { test } from '@playwright/test';
+import { chromium } from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+chromium.use(StealthPlugin());
+import * as cheerio from 'cheerio';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -14,149 +18,207 @@ const SUBREDDITS = [
 
 const OUTPUT_FILE = path.resolve(__dirname, 'reddit-stats.csv');
 
-const BLOCKED_RESOURCES = ['image', 'stylesheet', 'font', 'media', 'other'];
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-function parseNumber(val: string | null): number {
+const BROWSER_HEADERS: Record<string, string> = {
+  'User-Agent': BROWSER_UA,
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.5',
+};
+
+type SubredditStats = { members: number; weekly_visitors: number; weekly_contributions: number };
+
+function parseNumber(val: string | null | undefined): number {
   if (!val) return 0;
   return parseInt(val.replace(/,/g, ''), 10) || 0;
 }
 
-async function fetchSubscribers(): Promise<Record<string, number>> {
-  const results: Record<string, number> = {};
-  await Promise.all(
-    SUBREDDITS.map(async (sub) => {
-      try {
-        const res = await fetch(`https://www.reddit.com/r/${sub}/about.json`, {
-          headers: { 'User-Agent': 'RedditTracker/1.0' },
-        });
-        const json = await res.json();
-        results[sub] = json?.data?.subscribers ?? 0;
-        console.log(`  [API] r/${sub}: ${results[sub]} subscribers`);
-      } catch (err) {
-        console.log(`  [API] r/${sub} failed: ${err}`);
-        results[sub] = 0;
-      }
-    })
-  );
-  return results;
+function parseHeaderTag(html: string): SubredditStats | null {
+  const $ = cheerio.load(html);
+  const header = $('shreddit-subreddit-header').first();
+  if (!header.length) return null;
+
+  const members = parseNumber(header.attr('subscribers'));
+  const weekly_visitors = parseNumber(header.attr('weekly-active-users'));
+  const weekly_contributions = parseNumber(header.attr('weekly-contributions'));
+
+  if (members > 0 || weekly_visitors > 0) {
+    return { members, weekly_visitors, weekly_contributions };
+  }
+  return null;
+}
+
+/**
+ * Strategy 1: Fetch page HTML directly and parse with cheerio.
+ * Avoids browser overhead and JS challenges.
+ */
+async function fetchViaHTML(sub: string): Promise<SubredditStats | null> {
+  try {
+    const res = await fetch(`https://www.reddit.com/r/${sub}/`, {
+      headers: BROWSER_HEADERS,
+      redirect: 'follow',
+    });
+    return parseHeaderTag(await res.text());
+  } catch (err) {
+    console.log(`  [HTML] r/${sub} failed: ${err}`);
+    return null;
+  }
+}
+
+/**
+ * Strategy 2: about.json API for subscribers (try old.reddit.com first).
+ */
+async function fetchSubscribersAPI(sub: string): Promise<number> {
+  const urls = [
+    `https://old.reddit.com/r/${sub}/about.json`,
+    `https://www.reddit.com/r/${sub}/about.json`,
+  ];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { headers: { 'User-Agent': BROWSER_UA } });
+      const json = await res.json();
+      const count = json?.data?.subscribers ?? 0;
+      if (count > 0) return count;
+    } catch {}
+  }
+  return 0;
 }
 
 test('scrape reddit coding agent stats', async () => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
 
-  // Get current date in Israel time using formatting (YYYY-MM-DD)
   const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+  const results: Record<string, SubredditStats> = {};
 
-  // Fire off all API subscriber calls immediately (these are fine in parallel)
-  const membersPromise = fetchSubscribers();
-
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-    extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
-  });
-
-  // Scrape sequentially to avoid Reddit bot detection
-  const scraped: { subreddit: string; weekly_visitors: number; weekly_contributions: number }[] = [];
-
-  for (const subreddit of SUBREDDITS) {
-    console.log(`\nFetching r/${subreddit}...`);
-    
-    let weeklyVisitorsVal = 0;
-    let weeklyContributionsVal = 0;
-    let attempts = 0;
-    const maxAttempts = 3;
-
-    while (attempts < maxAttempts) {
-      attempts++;
-      if (attempts > 1) {
-        console.log(`  [Retry ${attempts}/${maxAttempts}] Fetching r/${subreddit}...`);
+  // ── Pass 1: fast HTML fetch (no browser) ──
+  console.log('Pass 1: HTML fetch...');
+  await Promise.all(
+    SUBREDDITS.map(async (sub) => {
+      const stats = await fetchViaHTML(sub);
+      if (stats) {
+        console.log(`  ✓ r/${sub}: members=${stats.members} visitors=${stats.weekly_visitors} contributions=${stats.weekly_contributions}`);
+        results[sub] = stats;
+      } else {
+        console.log(`  ✗ r/${sub}: no data from HTML`);
       }
-      
-      const page = await context.newPage();
+    })
+  );
 
-      await page.route('**/*', (route) => {
-        if (BLOCKED_RESOURCES.includes(route.request().resourceType())) {
-          route.abort();
-        } else {
-          route.continue();
+  // ── Pass 2: about.json API for missing subscribers ──
+  const missingSubs = SUBREDDITS.filter(s => !results[s] || results[s].members === 0);
+  if (missingSubs.length > 0) {
+    console.log('\nPass 2: about.json API for missing subscribers...');
+    await Promise.all(
+      missingSubs.map(async (sub) => {
+        const count = await fetchSubscribersAPI(sub);
+        if (count > 0) {
+          console.log(`  ✓ r/${sub}: ${count} subscribers`);
+          if (!results[sub]) results[sub] = { members: 0, weekly_visitors: 0, weekly_contributions: 0 };
+          results[sub].members = count;
         }
-      });
-
-      try {
-        await page.goto(`https://www.reddit.com/r/${subreddit}/`, {
-          waitUntil: 'domcontentloaded',
-          timeout: 30000,
-        });
-
-        await page.waitForSelector('shreddit-subreddit-header', { timeout: 15000 });
-
-        const weeklyVisitorsAttr = await page.getAttribute('shreddit-subreddit-header', 'weekly-active-users');
-        const weeklyContributionsAttr = await page.getAttribute('shreddit-subreddit-header', 'weekly-contributions');
-
-        weeklyVisitorsVal = parseNumber(weeklyVisitorsAttr);
-        weeklyContributionsVal = parseNumber(weeklyContributionsAttr);
-
-        if (weeklyVisitorsVal > 0 || weeklyContributionsVal > 0) {
-          console.log(`  ✓ weekly_visitors: ${weeklyVisitorsAttr || 0} | weekly_contributions: ${weeklyContributionsAttr || 0}`);
-          await page.close();
-          break;
-        } else {
-          console.log(`  ⚠ got 0 stats on attempt ${attempts}`);
-        }
-      } catch (err) {
-        console.log(`  ⚠ failed on attempt ${attempts}: ${err}`);
-      } finally {
-        if (!page.isClosed()) {
-          await page.close();
-        }
-      }
-
-      if (attempts < maxAttempts) {
-        // Random delay before retry
-        await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
-      }
-    }
-
-    if (weeklyVisitorsVal === 0 && weeklyContributionsVal === 0) {
-      console.log(`  ✗ failed to get stats for r/${subreddit} after ${maxAttempts} attempts`);
-    }
-
-    scraped.push({ subreddit, weekly_visitors: weeklyVisitorsVal, weekly_contributions: weeklyContributionsVal });
-
-    // Random delay between requests to avoid bot detection
-    await new Promise(r => setTimeout(r, 1000 + Math.random() * 2000));
+      })
+    );
   }
 
-  await context.close();
-  await browser.close();
+  // ── Pass 3: Playwright + Stealth for missing weekly stats ──
+  const needsBrowser = SUBREDDITS.filter(
+    s => !results[s] || (results[s].weekly_visitors === 0 && results[s].weekly_contributions === 0)
+  );
+  if (needsBrowser.length > 0) {
+    console.log(`\nPass 3: Playwright + Stealth for ${needsBrowser.length} subreddits...`);
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({
+      userAgent: BROWSER_UA,
+      extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
+      viewport: { width: 1920, height: 1080 },
+    });
 
-  const members = await membersPromise;
+    for (const subreddit of needsBrowser) {
+      console.log(`  Fetching r/${subreddit}...`);
+      let success = false;
 
-  // Sort by visitors descending
+      for (let attempt = 1; attempt <= 3 && !success; attempt++) {
+        if (attempt > 1) console.log(`  [Retry ${attempt}/3] r/${subreddit}...`);
+
+        const page = await context.newPage();
+        await page.route('**/*', (route) => {
+          const type = route.request().resourceType();
+          if (['image', 'stylesheet', 'font', 'media', 'other'].includes(type)) {
+            route.abort();
+          } else {
+            route.continue();
+          }
+        });
+
+        try {
+          await page.goto(`https://www.reddit.com/r/${subreddit}/`, {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000,
+          });
+
+          // Wait for the header element or timeout
+          try {
+            await page.waitForSelector('shreddit-subreddit-header', { timeout: 20000 });
+          } catch {}
+
+          // Parse whatever HTML we got (works even if selector didn't appear)
+          const stats = parseHeaderTag(await page.content());
+          if (stats && (stats.weekly_visitors > 0 || stats.weekly_contributions > 0)) {
+            console.log(`  ✓ r/${subreddit}: visitors=${stats.weekly_visitors} contributions=${stats.weekly_contributions}`);
+            if (!results[subreddit]) results[subreddit] = { members: 0, weekly_visitors: 0, weekly_contributions: 0 };
+            results[subreddit].weekly_visitors = stats.weekly_visitors;
+            results[subreddit].weekly_contributions = stats.weekly_contributions;
+            if (stats.members > 0 && results[subreddit].members === 0) {
+              results[subreddit].members = stats.members;
+            }
+            success = true;
+          } else {
+            console.log(`  ⚠ attempt ${attempt}: no stats found`);
+          }
+        } catch (err) {
+          console.log(`  ⚠ attempt ${attempt} failed: ${err}`);
+        } finally {
+          if (!page.isClosed()) await page.close();
+        }
+
+        if (!success && attempt < 3) {
+          await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
+        }
+      }
+
+      if (!success) console.log(`  ✗ r/${subreddit}: failed after 3 attempts`);
+      await new Promise(r => setTimeout(r, 1000 + Math.random() * 2000));
+    }
+
+    await context.close();
+    await browser.close();
+  }
+
+  // ── Build output ──
+  const scraped = SUBREDDITS.map(sub => ({
+    subreddit: sub,
+    ...(results[sub] ?? { members: 0, weekly_visitors: 0, weekly_contributions: 0 }),
+  }));
+
   const sorted = scraped.sort((a, b) => b.weekly_visitors - a.weekly_visitors);
 
-  // Print ranking
   console.log('\n======= RANKING =======');
-  sorted.forEach(({ subreddit, weekly_visitors, weekly_contributions }, i) => {
+  sorted.forEach(({ subreddit, members, weekly_visitors, weekly_contributions }, i) => {
     console.log(
-      `#${i + 1} r/${subreddit.padEnd(20)} members: ${String(members[subreddit] ?? 0).padStart(7)} | weekly_visitors: ${String(weekly_visitors).padStart(7)} | weekly_contributions: ${String(weekly_contributions).padStart(6)}`
+      `#${i + 1} r/${subreddit.padEnd(20)} members: ${String(members).padStart(7)} | weekly_visitors: ${String(weekly_visitors).padStart(7)} | weekly_contributions: ${String(weekly_contributions).padStart(6)}`
     );
   });
 
-  // Build new rows
-  const newRows = sorted.map(({ subreddit, weekly_visitors, weekly_contributions }) =>
-    `${date},${subreddit},${members[subreddit] ?? 0},${weekly_visitors},${weekly_contributions}`
+  // Write CSV (replace same-date rows)
+  const newRows = sorted.map(({ subreddit, members, weekly_visitors, weekly_contributions }) =>
+    `${date},${subreddit},${members},${weekly_visitors},${weekly_contributions}`
   );
-
-  // Read existing CSV, filter out rows from the same date, then append new rows
   const header = 'date,subreddit,members,weekly_visitors,weekly_contributions';
   let existingRows: string[] = [];
   if (fs.existsSync(OUTPUT_FILE)) {
     const lines = fs.readFileSync(OUTPUT_FILE, 'utf-8').split('\n').filter(Boolean);
     existingRows = lines.filter(line => line !== header && !line.startsWith(`${date},`));
   }
-
   fs.writeFileSync(OUTPUT_FILE, [header, ...existingRows, ...newRows].join('\n') + '\n');
 
   console.log(`\n✓ Stats appended to ${OUTPUT_FILE}`);
