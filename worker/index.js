@@ -32,7 +32,7 @@ function parseHeaderTag(html) {
 async function fetchRedditPage(sub) {
   const pageUrl = `https://www.reddit.com/r/${sub}/`;
 
-  const challengeRes = await fetch(pageUrl, { headers: BROWSER_HEADERS, redirect: 'follow' });
+  const challengeRes = await fetch(pageUrl, { headers: BROWSER_HEADERS, redirect: 'follow', cf: { cacheTtl: 0 } });
   const challengeHtml = await challengeRes.text();
 
   if (!challengeHtml.includes('Please wait for verification')) {
@@ -58,6 +58,7 @@ async function fetchRedditPage(sub) {
       'Cookie': cookies,
     },
     redirect: 'follow',
+    cf: { cacheTtl: 0 },
   });
 
   // Merge cookies from both responses
@@ -88,6 +89,7 @@ async function fetchSubredditStats(sub) {
   try {
     const res = await fetch(`https://www.reddit.com/r/${sub}/about.json`, {
       headers: { 'User-Agent': BROWSER_HEADERS['User-Agent'] },
+      cf: { cacheTtl: 0 },
     });
     const json = await res.json();
     members = json?.data?.subscribers ?? 0;
@@ -97,6 +99,7 @@ async function fetchSubredditStats(sub) {
     try {
       const res = await fetch(`https://www.reddit.com/r/${sub}/about.json`, {
         headers: { 'User-Agent': BROWSER_HEADERS['User-Agent'], 'Cookie': sessionCookies },
+        cf: { cacheTtl: 0 },
       });
       const json = await res.json();
       members = json?.data?.subscribers ?? 0;
