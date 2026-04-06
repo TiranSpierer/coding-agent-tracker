@@ -1,6 +1,9 @@
 name: Deploy Dashboard
 
 on:
+  schedule:
+    - cron: '0 4 * * *'
+      timezone: 'Asia/Jerusalem'
   push:
     branches: [main]
     paths: [index.html, reddit-stats.csv]
