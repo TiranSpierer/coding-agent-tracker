@@ -15,7 +15,7 @@ jobs:
       - name: Check date window (Apr 19-20 UTC only)
         run: |
           DAY=$(date -u +%Y-%m-%d)
-          if [[ "$DAY" != "2026-04-19" && "$DAY" != "2026-04-20" ]]; then
+          if [[ "$DAY" != "2026-04-14" && "$DAY" != "2026-04-19" && "$DAY" != "2026-04-20" ]]; then
             echo "Outside probe window ($DAY), skipping."
             echo "SKIP=true" >> $GITHUB_ENV
           fi
