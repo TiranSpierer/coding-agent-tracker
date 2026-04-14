@@ -1,0 +1,48 @@
+name: Timing Probe
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check date window (Apr 19-20 UTC only)
+        run: |
+          DAY=$(date -u +%Y-%m-%d)
+          if [[ "$DAY" != "2026-04-19" && "$DAY" != "2026-04-20" ]]; then
+            echo "Outside probe window ($DAY), skipping."
+            echo "SKIP=true" >> $GITHUB_ENV
+          fi
+
+      - name: Checkout repo
+        if: env.SKIP != 'true'
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        if: env.SKIP != 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        if: env.SKIP != 'true'
+        run: npm ci
+
+      - name: Run probe
+        if: env.SKIP != 'true'
+        run: npx tsx timing-probe/scraper.ts
+        env:
+          REDDIT_PROXY_URL: ${{ secrets.REDDIT_PROXY_URL }}
+
+      - name: Commit results
+        if: env.SKIP != 'true'
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: "probe: timing sample ${{ github.run_id }}"
+          file_pattern: timing-probe/weekly-reset-probe.csv
