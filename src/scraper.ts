@@ -12,6 +12,8 @@ const SUBREDDITS = [
   'GithubCopilot',
   'google_antigravity',
   'codex',
+  'RooCode',
+  'PiCodingAgent',
 ];
 
 const OUTPUT_FILE = path.resolve(__dirname, '..', 'reddit-stats.csv');
@@ -101,20 +103,22 @@ async function main() {
     process.exit(1);
   }
 
-  // Dedup: only append if ALL subreddits have changed weekly_visitors OR weekly_contributions
+  // Dedup: only append if ALL subreddits have changed, or new subreddits appeared
   const lastBatch = getLastBatch(OUTPUT_FILE);
   if (lastBatch.size > 0) {
+    const hasNewSubs = results.some(r => !lastBatch.has(r.subreddit));
     const allChanged = results.every(r => {
       const prev = lastBatch.get(r.subreddit);
       if (!prev) return true;
       return prev.weekly_visitors !== r.weekly_visitors || prev.weekly_contributions !== r.weekly_contributions;
     });
 
-    if (!allChanged) {
+    if (!hasNewSubs && !allChanged) {
       console.log('\n⏭ Weekly stats unchanged — skipping CSV write.');
       return;
     }
-    console.log('\n📊 Weekly stats changed — appending new batch.');
+    if (hasNewSubs) console.log('\n🆕 New subreddit(s) detected — appending batch.');
+    else console.log('\n📊 Weekly stats changed — appending new batch.');
   }
 
   const sorted = results.sort((a, b) => b.weekly_visitors - a.weekly_visitors);

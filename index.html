@@ -169,6 +169,8 @@
       google_antigravity:{ label: 'Antigravity',     color: '#eab308' },
       windsurf:          { label: 'Windsurf',        color: '#06b6d4' },
       CLine:             { label: 'Cline',           color: '#3b82f6' },
+      RooCode:           { label: 'Roo Code',        color: '#ec4899' },
+      PiCodingAgent:     { label: 'Pi',              color: '#8b5cf6' },
     };
 
     const METRIC_LABELS = {
@@ -251,27 +253,34 @@
       const cards = Object.entries(AGENTS)
         .map(([key, agent]) => {
           const curr = allRows.find(r => r.date === lastDate && r.subreddit === key);
+          if (!curr) return null;
           const prev = allRows.find(r => r.date === prevDate && r.subreddit === key);
-          if (!curr || !prev) return null;
           const val = curr[metric];
-          const prevVal = prev[metric];
-          const pct = prevVal ? ((val - prevVal) / prevVal) * 100 : 0;
+          const pct = prev ? ((val - prev[metric]) / prev[metric]) * 100 : null;
           return { key, agent, val, pct };
         })
         .filter(Boolean)
         .sort((a, b) => b.val - a.val);
 
       for (const { agent, val, pct } of cards) {
-        const dir = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
-        const arrow = pct > 0 ? '\u25B2' : pct < 0 ? '\u25BC' : '';
         const card = document.createElement('div');
         card.className = 'stat-card';
         card.style.setProperty('--agent-color', agent.color);
-        card.innerHTML = `
-          <div class="name">${agent.label}</div>
-          <div class="value">${formatValue(val)}</div>
-          <div class="change ${dir}">${arrow} ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</div>
-        `;
+        if (pct !== null) {
+          const dir = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
+          const arrow = pct > 0 ? '\u25B2' : pct < 0 ? '\u25BC' : '';
+          card.innerHTML = `
+            <div class="name">${agent.label}</div>
+            <div class="value">${formatValue(val)}</div>
+            <div class="change ${dir}">${arrow} ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</div>
+          `;
+        } else {
+          card.innerHTML = `
+            <div class="name">${agent.label}</div>
+            <div class="value">${formatValue(val)}</div>
+            <div class="change flat">new</div>
+          `;
+        }
         container.appendChild(card);
       }
 
