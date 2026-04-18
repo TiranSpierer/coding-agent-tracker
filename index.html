@@ -34,10 +34,14 @@
       color: #e2e8f0;
       border: 1px solid #334155;
       border-radius: 8px;
-      padding: 0.5rem 0.75rem;
+      padding: 0.5rem 2rem 0.5rem 0.75rem;
       font-size: 0.875rem;
       cursor: pointer;
       color-scheme: dark;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.6rem center;
     }
     select:hover { border-color: #475569; }
 
@@ -98,6 +102,25 @@
       padding: 4rem;
       color: #64748b;
     }
+
+    .stats-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+    }
+    .stat-card {
+      background: #1e293b;
+      border-radius: 10px;
+      padding: 1rem;
+      border-left: 3px solid var(--agent-color);
+    }
+    .stat-card .name { font-size: 0.8125rem; color: #94a3b8; margin-bottom: 0.375rem; }
+    .stat-card .value { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .stat-card .change { font-size: 0.8125rem; font-weight: 500; }
+    .stat-card .change.up { color: #22c55e; }
+    .stat-card .change.down { color: #ef4444; }
+    .stat-card .change.flat { color: #64748b; }
   </style>
 </head>
 <body>
@@ -134,6 +157,8 @@
   </div>
 
   <div class="loading" id="loading">Loading data...</div>
+
+  <div class="stats-cards" id="statsCards"></div>
 
   <script>
     const AGENTS = {
@@ -201,6 +226,60 @@
       });
 
       return { datasets, metric };
+    }
+
+    function formatValue(v) {
+      if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+      if (v >= 1000) return `${(v / 1000).toFixed(0)}K`;
+      return v.toString();
+    }
+
+    function updateStats() {
+      const metric = document.getElementById('metric').value;
+      const container = document.getElementById('statsCards');
+      container.innerHTML = '';
+
+      if (allDates.length < 2) return;
+
+      const lastDate = allDates[allDates.length - 1];
+      const lastMs = new Date(lastDate).getTime();
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      // Find the closest date on or before 7 days ago
+      const prevDate = [...allDates].reverse().find(d => lastMs - new Date(d).getTime() >= sevenDaysMs)
+        || allDates[0];
+
+      const cards = Object.entries(AGENTS)
+        .map(([key, agent]) => {
+          const curr = allRows.find(r => r.date === lastDate && r.subreddit === key);
+          const prev = allRows.find(r => r.date === prevDate && r.subreddit === key);
+          if (!curr || !prev) return null;
+          const val = curr[metric];
+          const prevVal = prev[metric];
+          const pct = prevVal ? ((val - prevVal) / prevVal) * 100 : 0;
+          return { key, agent, val, pct };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.val - a.val);
+
+      for (const { agent, val, pct } of cards) {
+        const dir = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
+        const arrow = pct > 0 ? '\u25B2' : pct < 0 ? '\u25BC' : '';
+        const card = document.createElement('div');
+        card.className = 'stat-card';
+        card.style.setProperty('--agent-color', agent.color);
+        card.innerHTML = `
+          <div class="name">${agent.label}</div>
+          <div class="value">${formatValue(val)}</div>
+          <div class="change ${dir}">${arrow} ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</div>
+        `;
+        container.appendChild(card);
+      }
+
+      // Add WoW label once at the end
+      const label = document.createElement('div');
+      label.style.cssText = 'grid-column: 1 / -1; text-align: right; font-size: 0.75rem; color: #475569; margin-top: -0.25rem;';
+      label.textContent = `vs ${prevDate} (WoW)`;
+      container.appendChild(label);
     }
 
     function updateChart() {
@@ -293,11 +372,12 @@
 
         buildAgentToggles();
 
-        document.getElementById('metric').addEventListener('change', updateChart);
+        document.getElementById('metric').addEventListener('change', () => { updateChart(); updateStats(); });
         document.getElementById('dateFrom').addEventListener('change', updateChart);
         document.getElementById('dateTo').addEventListener('change', updateChart);
 
         updateChart();
+        updateStats();
       } catch (err) {
         document.getElementById('loading').textContent = `Error: ${err.message}`;
       }
