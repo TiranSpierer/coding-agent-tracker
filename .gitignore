@@ -1,6 +1,5 @@
 node_modules/
 *.bak
-*.png
 .DS_Store
 Thumbs.db
 Desktop.ini
