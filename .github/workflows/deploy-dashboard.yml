@@ -6,7 +6,7 @@ on:
       timezone: 'Asia/Jerusalem'
   push:
     branches: [main]
-    paths: [index.html, reddit-stats.csv]
+    paths: [index.html, reddit-stats.csv, 'assets/**']
   workflow_dispatch:
 
 permissions:
@@ -31,6 +31,7 @@ jobs:
           sparse-checkout: |
             index.html
             reddit-stats.csv
+            assets/
           sparse-checkout-cone-mode: false
 
       - name: Setup Pages
