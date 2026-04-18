@@ -187,10 +187,9 @@
         const agent = AGENTS[sub];
         return {
           label: agent.label,
-          data: dates.map(d => {
-            const row = rows.find(r => r.date === d && r.subreddit === sub);
-            return row ? row[metric] : null;
-          }),
+          data: rows
+            .filter(r => r.subreddit === sub)
+            .map(r => ({ x: r.date, y: r[metric] })),
           borderColor: agent.color,
           backgroundColor: agent.color,
           borderWidth: 2,
@@ -201,21 +200,20 @@
         };
       });
 
-      return { dates, datasets, metric };
+      return { datasets, metric };
     }
 
     function updateChart() {
-      const { dates, datasets, metric } = getFiltered();
+      const { datasets, metric } = getFiltered();
 
       if (chart) {
-        chart.data.labels = dates;
         chart.data.datasets = datasets;
         chart.options.scales.y.title.text = METRIC_LABELS[metric];
         chart.update('none');
       } else {
         chart = new Chart(document.getElementById('chart'), {
           type: 'line',
-          data: { labels: dates, datasets },
+          data: { datasets },
           options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -235,6 +233,8 @@
             },
             scales: {
               x: {
+                type: 'time',
+                time: { unit: 'day', tooltipFormat: 'MMM d, yyyy' },
                 ticks: { color: '#64748b', maxTicksLimit: 20 },
                 grid: { color: 'rgba(255,255,255,0.05)' },
               },
