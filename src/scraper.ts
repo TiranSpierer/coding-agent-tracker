@@ -4,7 +4,6 @@ import * as dotenv from 'dotenv';
 
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
-// Use canonical subreddit names (exact casing) to avoid redirects that break challenge solving
 const SUBREDDITS = [
   'ClaudeCode',
   'CLine',
@@ -17,6 +16,7 @@ const SUBREDDITS = [
 
 const OUTPUT_FILE = path.resolve(__dirname, '..', 'reddit-stats.csv');
 const WORKER_URL = process.env.REDDIT_PROXY_URL || 'http://localhost:8787';
+const HEADER = 'date,time_utc,subreddit,members,weekly_visitors,weekly_contributions';
 
 type SubredditStats = {
   subreddit: string;
@@ -31,12 +31,32 @@ async function fetchSubredditStats(sub: string): Promise<SubredditStats> {
   return await res.json() as SubredditStats;
 }
 
+function getLastBatch(filePath: string): Map<string, { weekly_visitors: number; weekly_contributions: number }> {
+  const last = new Map<string, { weekly_visitors: number; weekly_contributions: number }>();
+  if (!fs.existsSync(filePath)) return last;
+
+  const lines = fs.readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
+  if (lines.length < 2) return last;
+
+  const lastDate = lines[lines.length - 1].split(',')[0];
+  for (const line of lines.slice(1)) {
+    const parts = line.split(',');
+    if (parts[0] !== lastDate) continue;
+    last.set(parts[2], {
+      weekly_visitors: +parts[4],
+      weekly_contributions: +parts[5],
+    });
+  }
+  return last;
+}
+
 async function main() {
-  const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+  const now = new Date();
+  const date = now.toISOString().split('T')[0];
+  const time = now.toISOString().split('T')[1].split('.')[0];
 
-  console.log(`Fetching stats for ${SUBREDDITS.length} subreddits via worker...`);
+  console.log(`[${date} ${time} UTC] Fetching stats for ${SUBREDDITS.length} subreddits via worker...`);
 
-  // Fetch all in parallel
   const results = await Promise.all(
     SUBREDDITS.map(async (sub) => {
       try {
@@ -51,7 +71,6 @@ async function main() {
     })
   );
 
-  // Retry any that missed weekly stats (rate limiting can cause failures)
   const needsRetry = results.filter(r => r.weekly_visitors === 0 && r.weekly_contributions === 0);
   if (needsRetry.length > 0) {
     console.log(`\nRetrying ${needsRetry.length} subreddits sequentially...`);
@@ -73,6 +92,31 @@ async function main() {
     }
   }
 
+  // Fail if any subreddit has a zero in any stat
+  const broken = results.filter(r => r.members === 0 || r.weekly_visitors === 0 || r.weekly_contributions === 0);
+  if (broken.length > 0) {
+    console.error(`\n✗ ERROR: ${broken.length} subreddit(s) have zero stats:`);
+    broken.forEach(r => console.error(`  - r/${r.subreddit}: members=${r.members} visitors=${r.weekly_visitors} contributions=${r.weekly_contributions}`));
+    console.error('\nReddit likely changed their challenge or blocked the Worker. See docs/ARCHITECTURE.md for troubleshooting.');
+    process.exit(1);
+  }
+
+  // Dedup: only append if ALL subreddits have changed weekly_visitors OR weekly_contributions
+  const lastBatch = getLastBatch(OUTPUT_FILE);
+  if (lastBatch.size > 0) {
+    const allChanged = results.every(r => {
+      const prev = lastBatch.get(r.subreddit);
+      if (!prev) return true;
+      return prev.weekly_visitors !== r.weekly_visitors || prev.weekly_contributions !== r.weekly_contributions;
+    });
+
+    if (!allChanged) {
+      console.log('\n⏭ Weekly stats unchanged — skipping CSV write.');
+      return;
+    }
+    console.log('\n📊 Weekly stats changed — appending new batch.');
+  }
+
   const sorted = results.sort((a, b) => b.weekly_visitors - a.weekly_visitors);
 
   console.log('\n======= RANKING =======');
@@ -82,28 +126,17 @@ async function main() {
     );
   });
 
-  // Write CSV (replace same-date rows)
   const newRows = sorted.map(({ subreddit, members, weekly_visitors, weekly_contributions }) =>
-    `${date},${subreddit},${members},${weekly_visitors},${weekly_contributions}`
+    `${date},${time},${subreddit},${members},${weekly_visitors},${weekly_contributions}`
   );
-  const header = 'date,subreddit,members,weekly_visitors,weekly_contributions';
-  let existingRows: string[] = [];
-  if (fs.existsSync(OUTPUT_FILE)) {
-    const lines = fs.readFileSync(OUTPUT_FILE, 'utf-8').split('\n').filter(Boolean);
-    existingRows = lines.filter(line => line !== header && !line.startsWith(`${date},`));
+
+  if (!fs.existsSync(OUTPUT_FILE)) {
+    fs.writeFileSync(OUTPUT_FILE, [HEADER, ...newRows].join('\n') + '\n');
+  } else {
+    fs.appendFileSync(OUTPUT_FILE, newRows.join('\n') + '\n');
   }
-  fs.writeFileSync(OUTPUT_FILE, [header, ...existingRows, ...newRows].join('\n') + '\n');
 
   console.log(`\n✓ Stats appended to ${OUTPUT_FILE}`);
-
-  // Fail if any subreddit has a zero in any stat — means Reddit changed something
-  const broken = sorted.filter(r => r.members === 0 || r.weekly_visitors === 0 || r.weekly_contributions === 0);
-  if (broken.length > 0) {
-    console.error(`\n✗ ERROR: ${broken.length} subreddit(s) have zero stats:`);
-    broken.forEach(r => console.error(`  - r/${r.subreddit}: members=${r.members} visitors=${r.weekly_visitors} contributions=${r.weekly_contributions}`));
-    console.error('\nReddit likely changed their challenge or blocked the Worker. See docs/ARCHITECTURE.md for troubleshooting.');
-    process.exit(1);
-  }
 }
 
 main();

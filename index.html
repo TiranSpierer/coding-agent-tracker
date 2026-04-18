@@ -159,10 +159,17 @@
 
     function parseCSV(text) {
       const lines = text.trim().split('\n');
-      return lines.slice(1).map(line => {
-        const [date, subreddit, members, weekly_visitors, weekly_contributions] = line.split(',');
+      const rows = lines.slice(1).map(line => {
+        const [date, time_utc, subreddit, members, weekly_visitors, weekly_contributions] = line.split(',');
         return { date, subreddit, members: +members, weekly_visitors: +weekly_visitors, weekly_contributions: +weekly_contributions };
       });
+      // If multiple batches share the same date, keep only the last one
+      const seen = new Map();
+      for (const row of rows) {
+        const key = `${row.date}|${row.subreddit}`;
+        seen.set(key, row);
+      }
+      return [...seen.values()];
     }
 
     function getFiltered() {
