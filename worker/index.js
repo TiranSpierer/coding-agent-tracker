@@ -47,11 +47,15 @@ async function fetchRedditPage(sub) {
   const input = challengeMatch[1];
   const solution = input + input;
 
+  const tokenMatch = challengeHtml.match(/name="token"\s+value="([^"]+)"/);
+  const token = tokenMatch ? tokenMatch[1] : '';
+
   const cookies = challengeRes.headers.getAll('set-cookie')
     .map(c => c.split(';')[0])
     .join('; ');
 
-  const solvedRes = await fetch(`${canonicalUrl}?solution=${solution}`, {
+  const params = new URLSearchParams({ solution, js_challenge: '1', token, jsc_orig_r: '' });
+  const solvedRes = await fetch(`${canonicalUrl}?${params}`, {
     headers: {
       ...BROWSER_HEADERS,
       'Referer': canonicalUrl,
