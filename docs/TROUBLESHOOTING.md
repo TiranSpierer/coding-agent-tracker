@@ -19,8 +19,11 @@ Look at the output — it will show which subs have 0s and for which fields.
 **All subreddits return 0 weekly stats (members still work):**
 - Reddit likely changed the JS challenge pattern
 - The current challenge is `(async e => e+e)("hex")` — solution is `hex + hex`
+- The challenge form also includes hidden fields: `js_challenge=1`, `token=<hex>`, `jsc_orig_r=`
+- The Worker must submit ALL form fields, not just the solution — Reddit intermittently rejects requests missing them
 - Check if the challenge HTML still contains `Please wait for verification`
 - Check if the pattern `\("([0-9a-f]+)"\)` still matches
+- Check if the form still has `name="token"` with a value
 - Fix: update `fetchRedditPage()` in `worker/index.js`
 
 **All subreddits return 0 members (weekly stats still work):**
@@ -72,6 +75,7 @@ Look for:
 | Symptom | Likely cause | Fix location |
 |---|---|---|
 | Challenge pattern changed | Reddit updated JS challenge | `worker/index.js` → `fetchRedditPage()` |
+| Challenge form fields changed | Reddit added/changed hidden form fields | `worker/index.js` → `fetchRedditPage()` |
 | No `shreddit-subreddit-header` in HTML | Reddit changed page structure | `worker/index.js` → `parseHeaderTag()` |
 | `about.json` returns challenge HTML | IP-level blocking of JSON endpoint | `worker/index.js` → `fetchSubredditStats()` |
 | Subreddit redirects to different name | Canonical name changed | `src/scraper.ts` → `SUBREDDITS` array |

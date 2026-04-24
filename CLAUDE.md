@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project does
 
-Scrapes daily Reddit stats (members, visitors, contributions) for 7 coding-agent subreddits via a Cloudflare Worker proxy, stores results in CSV. Runs autonomously every day via GitHub Actions. Dashboard at GitHub Pages.
+Scrapes daily Reddit stats (members, visitors, contributions) for 9 coding-agent subreddits via a Cloudflare Worker proxy, stores results in CSV. Runs autonomously every day via GitHub Actions. Dashboard at GitHub Pages.
 
 ## Architecture
 

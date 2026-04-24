@@ -13,6 +13,8 @@ Tracks **members**, **weekly visitors**, and **weekly contributions** across sub
 | r/GithubCopilot | GitHub Copilot |
 | r/google_antigravity | Antigravity |
 | r/codex | Codex |
+| r/RooCode | Roo Code |
+| r/PiCodingAgent | Pi Coding Agent |
 
 Data is collected daily via GitHub Actions and stored in `reddit-stats.csv`.
 
