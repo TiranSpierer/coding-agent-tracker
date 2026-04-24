@@ -2,7 +2,7 @@
 
 ## CI failed — subreddits returning 0s
 
-The scraper exits with code 1 if any subreddit returns 0 for any stat. This means Reddit changed something.
+The scraper exits with code 1 if any category has a subreddit returning 0 for any stat. This means Reddit changed something. Note: the scraper still writes CSVs for categories that succeeded — only the failing category is skipped.
 
 ### Step 1: Identify what's broken
 
@@ -12,18 +12,15 @@ Run locally to see which subreddits and which stats are failing:
 npm run scrape
 ```
 
-Look at the output — it will show which subs have 0s and for which fields.
+Look at the output — it will show per-category results, which subs have 0s and for which fields.
 
 ### Step 2: Diagnose the cause
 
 **All subreddits return 0 weekly stats (members still work):**
 - Reddit likely changed the JS challenge pattern
 - The current challenge is `(async e => e+e)("hex")` — solution is `hex + hex`
-- The challenge form also includes hidden fields: `js_challenge=1`, `token=<hex>`, `jsc_orig_r=`
-- The Worker must submit ALL form fields, not just the solution — Reddit intermittently rejects requests missing them
 - Check if the challenge HTML still contains `Please wait for verification`
 - Check if the pattern `\("([0-9a-f]+)"\)` still matches
-- Check if the form still has `name="token"` with a value
 - Fix: update `fetchRedditPage()` in `worker/index.js`
 
 **All subreddits return 0 members (weekly stats still work):**
@@ -35,7 +32,12 @@ Look at the output — it will show which subs have 0s and for which fields.
 **Specific subreddits return 0s (others work fine):**
 - Likely a subreddit name casing issue — Reddit renamed or changed canonical casing
 - Visit `reddit.com/r/<name>` in a browser and check the URL after redirect
-- Fix: update the `SUBREDDITS` array in `src/scraper.ts` with the canonical name
+- Fix: update the subreddit's `name` field in `subreddits.json` with the canonical name
+
+**An entire category fails but others work:**
+- Check the subreddit names in that category's section of `subreddits.json`
+- A subreddit may have been renamed, gone private, or been deleted
+- Fix: update or remove the broken subreddit entry in `subreddits.json`
 
 **All stats return 0 for all subreddits:**
 - The Worker itself may be down or misconfigured
@@ -75,10 +77,9 @@ Look for:
 | Symptom | Likely cause | Fix location |
 |---|---|---|
 | Challenge pattern changed | Reddit updated JS challenge | `worker/index.js` → `fetchRedditPage()` |
-| Challenge form fields changed | Reddit added/changed hidden form fields | `worker/index.js` → `fetchRedditPage()` |
 | No `shreddit-subreddit-header` in HTML | Reddit changed page structure | `worker/index.js` → `parseHeaderTag()` |
 | `about.json` returns challenge HTML | IP-level blocking of JSON endpoint | `worker/index.js` → `fetchSubredditStats()` |
-| Subreddit redirects to different name | Canonical name changed | `src/scraper.ts` → `SUBREDDITS` array |
+| Subreddit redirects to different name | Canonical name changed | `subreddits.json` → subreddit `name` field |
 | Worker returns 500 or timeout | Cloudflare Worker issue | Check `wrangler tail` logs |
 | CAPTCHA / Turnstile page | Reddit upgraded bot detection | Major rework needed — see below |
 

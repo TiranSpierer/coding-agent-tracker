@@ -2,18 +2,27 @@
 
 ## Overview
 
-This project scrapes weekly stats (members, visitors, contributions) from 9 Reddit coding-agent subreddits and stores them in a CSV. It runs autonomously via GitHub Actions on a recurring schedule.
+This project scrapes weekly stats (members, visitors, contributions) from multiple categories of Reddit communities and stores them in per-category CSVs. It runs autonomously via GitHub Actions every hour.
 
 ```
 GitHub Actions (CI)
   └── src/scraper.ts          (tsx — plain Node script)
-        └── fetch(`CF_WORKER_URL?sub=X`)
-              └── worker/index.js   (Cloudflare Worker on edge network)
-                    ├── GET reddit.com/r/X/     (HTML, with JS challenge solving)
-                    │     └── parse <shreddit-subreddit-header> for weekly stats
-                    └── GET reddit.com/r/X/about.json  (JSON, with session cookies)
-                          └── parse .data.subscribers for member count
+        ├── reads subreddits.json   (category + subreddit config)
+        └── for each unique subreddit:
+              fetch(`CF_WORKER_URL?sub=X`)
+                └── worker/index.js   (Cloudflare Worker on edge network)
+                      ├── GET reddit.com/r/X/     (HTML, with JS challenge solving)
+                      │     └── parse <shreddit-subreddit-header> for weekly stats
+                      └── GET reddit.com/r/X/about.json  (JSON, with session cookies)
+                            └── parse .data.subscribers for member count
+        └── writes results to data/{category-id}.csv (one file per category)
 ```
+
+## Config-driven architecture
+
+All categories and subreddits are defined in `subreddits.json` at the project root. Both the scraper and the dashboard read this single file. Adding a new category or subreddit requires editing only this file.
+
+Each category has an `id` (used as CSV filename slug), a display `name`, a `description`, and an array of subreddits with canonical `name`, display `label`, and chart `color`.
 
 ## Why a Cloudflare Worker?
 
@@ -40,31 +49,34 @@ The HTML header tag does NOT contain subscriber count. Instead:
 
 ## Subreddit name casing matters
 
-Reddit redirects non-canonical subreddit names (e.g., `Cline` → `CLine`). This redirect breaks the challenge-solving flow because cookies are bound to the original URL. Always use the exact canonical name as shown on Reddit.
-
-Current canonical names (as of April 2026):
-- `ClaudeCode`, `CLine`, `cursor`, `windsurf`, `GithubCopilot`, `google_antigravity`, `codex`, `RooCode`, `PiCodingAgent`
+Reddit redirects non-canonical subreddit names (e.g., `Cline` → `CLine`). This redirect breaks the challenge-solving flow because cookies are bound to the original URL. Always use the exact canonical name as shown on Reddit in `subreddits.json`.
 
 To find a subreddit's canonical name: visit `reddit.com/r/name` and check the URL after redirect.
 
 ## Data flow
 
-1. `src/scraper.ts` calls the Worker for all 9 subreddits in parallel
-2. Any that return 0 for weekly stats get retried sequentially (1s delay)
-3. Results are sorted by weekly visitors and written to `reddit-stats.csv`
-4. Same-date rows are replaced (idempotent — safe to run multiple times per day)
-5. If any stat is 0 for any subreddit, the script exits with code 1 (CI failure + email alert)
+1. `src/scraper.ts` reads `subreddits.json` and flattens all subreddits across categories (deduped)
+2. Calls the Worker for all subreddits in parallel
+3. Any that return 0 for weekly stats get retried sequentially (1s delay)
+4. For each category independently:
+   a. Filters results to that category's subreddits
+   b. Validates: if any subreddit has zeros, the category is marked as failed and its CSV is NOT written
+   c. Checks dedup against the category's last batch — skips write if stats unchanged
+   d. Sorts by weekly visitors and appends to `data/{category-id}.csv`
+5. If any category failed, the scraper exits code 1 (CI failure + email alert), but successful categories' CSVs are still written and committed
 
 ## File map
 
 | File | Purpose |
 |---|---|
+| `subreddits.json` | Config: categories, subreddits, labels, colors |
 | `src/scraper.ts` | Main scraper script, run with `tsx` |
 | `worker/index.js` | Cloudflare Worker proxy |
 | `worker/wrangler.toml` | Worker deployment config |
 | `index.html` | Dashboard (Chart.js), served via GitHub Pages |
-| `reddit-stats.csv` | Output data (auto-committed by CI) |
-| `.github/workflows/reddit-tracker.yml` | Daily cron + manual trigger |
+| `data/*.csv` | Output data, one CSV per category (auto-committed by CI) |
+| `.github/workflows/reddit-tracker.yml` | Hourly cron + manual trigger |
+| `.github/workflows/deploy-dashboard.yml` | GitHub Pages deployment |
 | `.env` / `.env.example` | `REDDIT_PROXY_URL` for local runs |
 | `docs/ARCHITECTURE.md` | This file |
 | `docs/TROUBLESHOOTING.md` | When things break |

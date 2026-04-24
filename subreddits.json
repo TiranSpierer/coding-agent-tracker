@@ -1,0 +1,41 @@
+{
+  "categories": [
+    {
+      "id": "coding-agents",
+      "name": "Coding Agents",
+      "description": "AI coding assistant communities",
+      "subreddits": [
+        { "name": "ClaudeCode",         "label": "Claude Code",    "color": "#f97316" },
+        { "name": "codex",              "label": "Codex",          "color": "#ef4444" },
+        { "name": "cursor",             "label": "Cursor",         "color": "#a855f7" },
+        { "name": "GithubCopilot",      "label": "GitHub Copilot", "color": "#10b981" },
+        { "name": "google_antigravity", "label": "Antigravity",    "color": "#eab308" },
+        { "name": "windsurf",           "label": "Windsurf",       "color": "#06b6d4" },
+        { "name": "CLine",              "label": "Cline",          "color": "#3b82f6" },
+        { "name": "RooCode",            "label": "Roo Code",       "color": "#ec4899" },
+        { "name": "PiCodingAgent",      "label": "Pi",             "color": "#84cc16" }
+      ]
+    },
+    {
+      "id": "llms",
+      "name": "LLMs",
+      "description": "Large language model communities",
+      "subreddits": [
+        { "name": "ClaudeAI",       "label": "Claude",      "color": "#f97316" },
+        { "name": "ChatGPT",        "label": "ChatGPT",     "color": "#10b981" },
+        { "name": "grok",           "label": "Grok",        "color": "#ef4444" },
+        { "name": "GeminiAI",       "label": "Gemini",      "color": "#3b82f6" }
+      ]
+    },
+    {
+      "id": "companies",
+      "name": "Companies",
+      "description": "AI company communities",
+      "subreddits": [
+        { "name": "OpenAI",         "label": "OpenAI",      "color": "#10b981" },
+        { "name": "Anthropic",      "label": "Anthropic",   "color": "#f97316" },
+        { "name": "perplexity_ai",  "label": "Perplexity",  "color": "#a855f7" }
+      ]
+    }
+  ]
+}

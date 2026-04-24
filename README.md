@@ -1,8 +1,10 @@
-# coding-agent-tracker
+# Reddit Community Tracker
 
-Weekly tracker comparing AI coding agent communities on Reddit.
+Weekly tracker comparing AI communities on Reddit across multiple categories.
 
-Tracks **members**, **weekly visitors**, and **weekly contributions** across subreddits:
+Tracks **members**, **weekly visitors**, and **weekly contributions** for each subreddit.
+
+### Coding Agents
 
 | Subreddit | Agent |
 |---|---|
@@ -14,11 +16,30 @@ Tracks **members**, **weekly visitors**, and **weekly contributions** across sub
 | r/google_antigravity | Antigravity |
 | r/codex | Codex |
 | r/RooCode | Roo Code |
-| r/PiCodingAgent | Pi Coding Agent |
+| r/PiCodingAgent | Pi |
 
-Data is collected daily via GitHub Actions and stored in `reddit-stats.csv`.
+### LLMs
 
-**[Live Dashboard](https://tiranspierer.github.io/coding-agent-tracker/)** — interactive chart with metric/agent/date filters.
+| Subreddit | Model |
+|---|---|
+| r/ClaudeAI | Claude |
+| r/ChatGPT | ChatGPT |
+| r/grok | Grok |
+| r/GeminiAI | Gemini |
+
+### Companies
+
+| Subreddit | Company |
+|---|---|
+| r/OpenAI | OpenAI |
+| r/Anthropic | Anthropic |
+| r/perplexity_ai | Perplexity |
+
+Data is collected hourly via GitHub Actions and stored in per-category CSVs in `data/`.
+
+All categories and subreddits are defined in `subreddits.json` — adding a new category or subreddit requires editing only this file.
+
+**[Live Dashboard](https://tiranspierer.github.io/coding-agent-tracker/)** — interactive chart with metric/subreddit/date filters, collapsible sections per category.
 
 ## Setup
 
