@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/png" href="assets/favicon.png">
-  <title>Coding Agent Tracker</title>
+  <title>Reddit Community Tracker</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
   <style>
@@ -20,18 +20,59 @@
     h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.25rem; }
     .subtitle { color: #94a3b8; font-size: 0.875rem; margin-bottom: 1.5rem; }
 
+    /* Collapsible sections */
+    .category-section {
+      background: #1e293b;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      margin-bottom: 1.25rem;
+      overflow: hidden;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.25rem;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .section-header:hover { background: rgba(255,255,255,0.03); }
+    .section-header h2 {
+      font-size: 1.125rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .section-desc {
+      font-size: 0.8125rem;
+      color: #64748b;
+      margin-top: 0.125rem;
+    }
+    .collapse-arrow {
+      font-size: 0.75rem;
+      color: #64748b;
+      transition: transform 0.2s;
+      display: inline-block;
+    }
+    .collapse-arrow.collapsed { transform: rotate(-90deg); }
+    .section-body { padding: 0 1.25rem 1.25rem; }
+    .section-body.hidden { display: none; }
+
+    /* Controls */
     .controls {
       display: flex;
       flex-wrap: wrap;
       gap: 1rem;
       align-items: flex-start;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.25rem;
     }
     .control-group { display: flex; flex-direction: column; gap: 0.375rem; }
     .control-group label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
 
     select {
-      background: #1e293b;
+      background: #0f172a;
       color: #e2e8f0;
       border: 1px solid #334155;
       border-radius: 8px;
@@ -58,14 +99,14 @@
       padding: 0.375rem 0.75rem;
       border-radius: 999px;
       border: 1px solid #334155;
-      background: #1e293b;
+      background: #0f172a;
       color: #e2e8f0;
       cursor: pointer;
       font-size: 0.8125rem;
       user-select: none;
     }
     .agent-toggle:hover { border-color: #475569; }
-    .agent-toggle.active { border-color: var(--agent-color); background: color-mix(in srgb, var(--agent-color) 15%, #1e293b); }
+    .agent-toggle.active { border-color: var(--agent-color); background: color-mix(in srgb, var(--agent-color) 15%, #0f172a); }
     .agent-dot {
       width: 8px;
       height: 8px;
@@ -79,7 +120,7 @@
       align-items: center;
     }
     input[type="date"] {
-      background: #1e293b;
+      background: #0f172a;
       color: #e2e8f0;
       border: 1px solid #334155;
       border-radius: 8px;
@@ -91,16 +132,17 @@
     .date-sep { color: #475569; }
 
     .chart-container {
-      background: #1e293b;
-      border-radius: 12px;
-      padding: 1.5rem;
+      background: #0f172a;
+      border-radius: 10px;
+      padding: 1.25rem;
       position: relative;
-      height: 60vh;
-      min-height: 300px;
+      height: 50vh;
+      min-height: 280px;
     }
-    .loading {
+
+    .section-loading {
       text-align: center;
-      padding: 4rem;
+      padding: 3rem;
       color: #64748b;
     }
 
@@ -108,10 +150,10 @@
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
       gap: 0.75rem;
-      margin-top: 1.5rem;
+      margin-top: 1.25rem;
     }
     .stat-card {
-      background: #1e293b;
+      background: #0f172a;
       border-radius: 10px;
       padding: 1rem;
       border-left: 3px solid var(--agent-color);
@@ -122,76 +164,35 @@
     .stat-card .change.up { color: #22c55e; }
     .stat-card .change.down { color: #ef4444; }
     .stat-card .change.flat { color: #64748b; }
+
+    .page-loading {
+      text-align: center;
+      padding: 4rem;
+      color: #64748b;
+    }
   </style>
 </head>
 <body>
-  <h1>Coding Agent Tracker</h1>
-  <p class="subtitle">Daily Reddit community stats for AI coding agents</p>
+  <h1>Reddit Community Tracker</h1>
+  <p class="subtitle">Weekly stats across AI communities on Reddit</p>
 
-  <div class="controls">
-    <div class="control-group">
-      <label>Metric</label>
-      <select id="metric">
-        <option value="members">Members</option>
-        <option value="weekly_visitors" selected>Weekly Visitors</option>
-        <option value="weekly_contributions">Weekly Contributions</option>
-      </select>
-    </div>
-
-    <div class="control-group">
-      <label>Date Range</label>
-      <div class="date-inputs">
-        <input type="date" id="dateFrom">
-        <span class="date-sep">to</span>
-        <input type="date" id="dateTo">
-      </div>
-    </div>
-
-    <div class="control-group">
-      <label>Agents</label>
-      <div class="agents" id="agentToggles"></div>
-    </div>
-  </div>
-
-  <div class="chart-container">
-    <canvas id="chart"></canvas>
-  </div>
-
-  <div class="loading" id="loading">Loading data...</div>
-
-  <div class="stats-cards" id="statsCards"></div>
+  <div id="sections"></div>
+  <div class="page-loading" id="pageLoading">Loading data...</div>
 
   <script>
-    const AGENTS = {
-      ClaudeCode:        { label: 'Claude Code',    color: '#f97316' },
-      codex:             { label: 'Codex',           color: '#ef4444' },
-      cursor:            { label: 'Cursor',          color: '#a855f7' },
-      GithubCopilot:     { label: 'GitHub Copilot',  color: '#10b981' },
-      google_antigravity:{ label: 'Antigravity',     color: '#eab308' },
-      windsurf:          { label: 'Windsurf',        color: '#06b6d4' },
-      CLine:             { label: 'Cline',           color: '#3b82f6' },
-      RooCode:           { label: 'Roo Code',        color: '#ec4899' },
-      PiCodingAgent:     { label: 'Pi',              color: '#84cc16' },
-    };
-
     const METRIC_LABELS = {
       members: 'Members',
       weekly_visitors: 'Weekly Visitors',
       weekly_contributions: 'Weekly Contributions',
     };
 
-    let allRows = [];
-    let allDates = [];
-    let activeAgents = new Set(Object.keys(AGENTS));
-    let chart = null;
-
     function parseCSV(text) {
       const lines = text.trim().split('\n');
+      if (lines.length < 2) return [];
       const rows = lines.slice(1).map(line => {
         const [date, time_utc, subreddit, members, weekly_visitors, weekly_contributions] = line.split(',');
         return { date, subreddit, members: +members, weekly_visitors: +weekly_visitors, weekly_contributions: +weekly_contributions };
       });
-      // If multiple batches share the same date, keep only the last one
       const seen = new Map();
       for (const row of rows) {
         const key = `${row.date}|${row.subreddit}`;
@@ -200,196 +201,359 @@
       return [...seen.values()];
     }
 
-    function getFiltered() {
-      const metric = document.getElementById('metric').value;
-      const from = document.getElementById('dateFrom').value;
-      const to = document.getElementById('dateTo').value;
-
-      let rows = allRows;
-      if (from) rows = rows.filter(r => r.date >= from);
-      if (to) rows = rows.filter(r => r.date <= to);
-
-      const dates = [...new Set(rows.map(r => r.date))].sort();
-
-      const datasets = [...activeAgents].map(sub => {
-        const agent = AGENTS[sub];
-        return {
-          label: agent.label,
-          data: rows
-            .filter(r => r.subreddit === sub)
-            .map(r => ({ x: r.date, y: r[metric] })),
-          borderColor: agent.color,
-          backgroundColor: agent.color,
-          borderWidth: 2,
-          pointRadius: dates.length > 60 ? 0 : 3,
-          pointHoverRadius: 6,
-          tension: 0.3,
-          spanGaps: true,
-        };
-      });
-
-      return { datasets, metric };
-    }
-
     function formatValue(v) {
       if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
       if (v >= 1000) return `${(v / 1000).toFixed(0)}K`;
       return v.toString();
     }
 
-    function updateStats() {
-      const metric = document.getElementById('metric').value;
-      const container = document.getElementById('statsCards');
-      container.innerHTML = '';
-
-      if (allDates.length < 2) return;
-
-      const lastDate = allDates[allDates.length - 1];
-      const lastMs = new Date(lastDate).getTime();
-      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-      // Find the closest date on or before 7 days ago
-      const prevDate = [...allDates].reverse().find(d => lastMs - new Date(d).getTime() >= sevenDaysMs)
-        || allDates[0];
-
-      const cards = Object.entries(AGENTS)
-        .map(([key, agent]) => {
-          const curr = allRows.find(r => r.date === lastDate && r.subreddit === key);
-          if (!curr) return null;
-          const prev = allRows.find(r => r.date === prevDate && r.subreddit === key);
-          const val = curr[metric];
-          const pct = prev ? ((val - prev[metric]) / prev[metric]) * 100 : null;
-          return { key, agent, val, pct };
-        })
-        .filter(Boolean)
-        .sort((a, b) => b.val - a.val);
-
-      for (const { agent, val, pct } of cards) {
-        const card = document.createElement('div');
-        card.className = 'stat-card';
-        card.style.setProperty('--agent-color', agent.color);
-        if (pct !== null) {
-          const dir = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
-          const arrow = pct > 0 ? '\u25B2' : pct < 0 ? '\u25BC' : '';
-          card.innerHTML = `
-            <div class="name">${agent.label}</div>
-            <div class="value">${formatValue(val)}</div>
-            <div class="change ${dir}">${arrow} ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</div>
-          `;
-        } else {
-          card.innerHTML = `
-            <div class="name">${agent.label}</div>
-            <div class="value">${formatValue(val)}</div>
-            <div class="change flat">new</div>
-          `;
-        }
-        container.appendChild(card);
-      }
-
-      // Add WoW label once at the end
-      const label = document.createElement('div');
-      label.style.cssText = 'grid-column: 1 / -1; text-align: right; font-size: 0.75rem; color: #475569; margin-top: -0.25rem;';
-      label.textContent = `vs ${prevDate} (WoW)`;
-      container.appendChild(label);
-    }
-
-    function updateChart() {
-      const { datasets, metric } = getFiltered();
-
-      if (chart) {
-        chart.data.datasets = datasets;
-        chart.options.scales.y.title.text = METRIC_LABELS[metric];
-        chart.update('none');
-      } else {
-        chart = new Chart(document.getElementById('chart'), {
-          type: 'line',
-          data: { datasets },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'nearest', axis: 'x', intersect: false },
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                backgroundColor: '#0f172a',
-                titleColor: '#e2e8f0',
-                bodyColor: '#cbd5e1',
-                borderColor: '#334155',
-                borderWidth: 1,
-                callbacks: {
-                  label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y?.toLocaleString() ?? 'N/A'}`,
-                },
-              },
-            },
-            scales: {
-              x: {
-                type: 'time',
-                time: { unit: 'day', tooltipFormat: 'MMM d, yyyy' },
-                ticks: { color: '#64748b', maxTicksLimit: 20 },
-                grid: { color: 'rgba(255,255,255,0.05)' },
-              },
-              y: {
-                title: { display: true, text: METRIC_LABELS[metric], color: '#64748b' },
-                ticks: {
-                  color: '#64748b',
-                  callback: v => v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v,
-                },
-                grid: { color: 'rgba(255,255,255,0.05)' },
-              },
+    function createChartOptions(metricLabel) {
+      return {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'nearest', axis: 'x', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#0f172a',
+            titleColor: '#e2e8f0',
+            bodyColor: '#cbd5e1',
+            borderColor: '#334155',
+            borderWidth: 1,
+            callbacks: {
+              label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y?.toLocaleString() ?? 'N/A'}`,
             },
           },
-        });
-      }
+        },
+        scales: {
+          x: {
+            type: 'time',
+            time: { unit: 'day', tooltipFormat: 'MMM d, yyyy' },
+            ticks: { color: '#64748b', maxTicksLimit: 20 },
+            grid: { color: 'rgba(255,255,255,0.05)' },
+          },
+          y: {
+            title: { display: true, text: metricLabel, color: '#64748b' },
+            ticks: {
+              color: '#64748b',
+              callback: v => v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v,
+            },
+            grid: { color: 'rgba(255,255,255,0.05)' },
+          },
+        },
+      };
     }
 
-    function buildAgentToggles() {
-      const container = document.getElementById('agentToggles');
-      for (const [key, agent] of Object.entries(AGENTS)) {
-        const btn = document.createElement('button');
-        btn.className = 'agent-toggle active';
-        btn.style.setProperty('--agent-color', agent.color);
-        btn.innerHTML = `<span class="agent-dot"></span>${agent.label}`;
-        btn.addEventListener('click', () => {
-          if (activeAgents.has(key)) {
-            activeAgents.delete(key);
-            btn.classList.remove('active');
+    class CategorySection {
+      constructor(category) {
+        this.category = category;
+        this.chart = null;
+        this.allRows = [];
+        this.allDates = [];
+        this.activeSubreddits = new Set(category.subreddits.map(s => s.name));
+        this.subLookup = {};
+        for (const s of category.subreddits) {
+          this.subLookup[s.name] = { label: s.label, color: s.color };
+        }
+        this.els = {};
+        this.container = this.buildDOM();
+      }
+
+      buildDOM() {
+        const section = document.createElement('section');
+        section.className = 'category-section';
+
+        const collapsed = localStorage.getItem(`collapse-${this.category.id}`) === 'true';
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'section-header';
+        header.innerHTML = `
+          <div>
+            <h2><span class="collapse-arrow ${collapsed ? 'collapsed' : ''}">&#9660;</span> ${this.category.name}</h2>
+            <p class="section-desc">${this.category.description}</p>
+          </div>
+        `;
+
+        // Body
+        const body = document.createElement('div');
+        body.className = `section-body${collapsed ? ' hidden' : ''}`;
+
+        this.els.arrow = header.querySelector('.collapse-arrow');
+        this.els.body = body;
+
+        header.addEventListener('click', () => this.toggle());
+
+        // Loading placeholder
+        const loading = document.createElement('div');
+        loading.className = 'section-loading';
+        loading.textContent = 'Loading...';
+        this.els.loading = loading;
+        body.appendChild(loading);
+
+        section.appendChild(header);
+        section.appendChild(body);
+
+        return section;
+      }
+
+      toggle() {
+        const isHidden = this.els.body.classList.toggle('hidden');
+        this.els.arrow.classList.toggle('collapsed', isHidden);
+        localStorage.setItem(`collapse-${this.category.id}`, isHidden ? 'true' : 'false');
+
+        if (!isHidden && this.chart) {
+          this.chart.resize();
+        }
+      }
+
+      async load() {
+        try {
+          const res = await fetch(`data/${this.category.id}.csv`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const text = await res.text();
+          this.allRows = parseCSV(text);
+          this.allDates = [...new Set(this.allRows.map(r => r.date))].sort();
+
+          this.els.loading.remove();
+          this.buildControls();
+          this.buildChartContainer();
+          this.buildStatsContainer();
+          this.updateChart();
+          this.updateStats();
+        } catch {
+          this.els.loading.textContent = 'No data yet — will appear after first scrape.';
+          this.els.loading.style.color = '#475569';
+        }
+      }
+
+      buildControls() {
+        const controls = document.createElement('div');
+        controls.className = 'controls';
+
+        // Metric dropdown
+        const metricGroup = document.createElement('div');
+        metricGroup.className = 'control-group';
+        metricGroup.innerHTML = '<label>Metric</label>';
+        const metricSelect = document.createElement('select');
+        metricSelect.innerHTML = `
+          <option value="members">Members</option>
+          <option value="weekly_visitors" selected>Weekly Visitors</option>
+          <option value="weekly_contributions">Weekly Contributions</option>
+        `;
+        metricSelect.addEventListener('change', () => { this.updateChart(); this.updateStats(); });
+        metricGroup.appendChild(metricSelect);
+        this.els.metric = metricSelect;
+
+        // Date range
+        const dateGroup = document.createElement('div');
+        dateGroup.className = 'control-group';
+        dateGroup.innerHTML = '<label>Date Range</label>';
+        const dateInputs = document.createElement('div');
+        dateInputs.className = 'date-inputs';
+
+        const dateFrom = document.createElement('input');
+        dateFrom.type = 'date';
+        const dateTo = document.createElement('input');
+        dateTo.type = 'date';
+
+        if (this.allDates.length > 0) {
+          dateFrom.min = this.allDates[0];
+          dateFrom.max = this.allDates[this.allDates.length - 1];
+          dateTo.min = this.allDates[0];
+          dateTo.max = this.allDates[this.allDates.length - 1];
+          dateFrom.value = this.allDates[0];
+          dateTo.value = this.allDates[this.allDates.length - 1];
+        }
+
+        dateFrom.addEventListener('change', () => this.updateChart());
+        dateTo.addEventListener('change', () => this.updateChart());
+
+        const sep = document.createElement('span');
+        sep.className = 'date-sep';
+        sep.textContent = 'to';
+
+        dateInputs.appendChild(dateFrom);
+        dateInputs.appendChild(sep);
+        dateInputs.appendChild(dateTo);
+        dateGroup.appendChild(dateInputs);
+
+        this.els.dateFrom = dateFrom;
+        this.els.dateTo = dateTo;
+
+        // Subreddit toggles
+        const toggleGroup = document.createElement('div');
+        toggleGroup.className = 'control-group';
+        toggleGroup.innerHTML = '<label>Subreddits</label>';
+        const toggleContainer = document.createElement('div');
+        toggleContainer.className = 'agents';
+
+        for (const sub of this.category.subreddits) {
+          const btn = document.createElement('button');
+          btn.className = 'agent-toggle active';
+          btn.style.setProperty('--agent-color', sub.color);
+          btn.innerHTML = `<span class="agent-dot"></span>${sub.label}`;
+          btn.addEventListener('click', () => {
+            if (this.activeSubreddits.has(sub.name)) {
+              this.activeSubreddits.delete(sub.name);
+              btn.classList.remove('active');
+            } else {
+              this.activeSubreddits.add(sub.name);
+              btn.classList.add('active');
+            }
+            this.updateChart();
+          });
+          toggleContainer.appendChild(btn);
+        }
+
+        toggleGroup.appendChild(toggleContainer);
+
+        controls.appendChild(metricGroup);
+        controls.appendChild(dateGroup);
+        controls.appendChild(toggleGroup);
+        this.els.body.appendChild(controls);
+      }
+
+      buildChartContainer() {
+        const container = document.createElement('div');
+        container.className = 'chart-container';
+        const canvas = document.createElement('canvas');
+        container.appendChild(canvas);
+        this.els.canvas = canvas;
+        this.els.body.appendChild(container);
+      }
+
+      buildStatsContainer() {
+        const container = document.createElement('div');
+        container.className = 'stats-cards';
+        this.els.statsCards = container;
+        this.els.body.appendChild(container);
+      }
+
+      getFilteredDatasets() {
+        const metric = this.els.metric.value;
+        const from = this.els.dateFrom.value;
+        const to = this.els.dateTo.value;
+
+        let rows = this.allRows;
+        if (from) rows = rows.filter(r => r.date >= from);
+        if (to) rows = rows.filter(r => r.date <= to);
+
+        const dates = [...new Set(rows.map(r => r.date))].sort();
+
+        const datasets = [...this.activeSubreddits].map(sub => {
+          const info = this.subLookup[sub];
+          if (!info) return null;
+          return {
+            label: info.label,
+            data: rows
+              .filter(r => r.subreddit === sub)
+              .map(r => ({ x: r.date, y: r[metric] })),
+            borderColor: info.color,
+            backgroundColor: info.color,
+            borderWidth: 2,
+            pointRadius: dates.length > 60 ? 0 : 3,
+            pointHoverRadius: 6,
+            tension: 0.3,
+            spanGaps: true,
+          };
+        }).filter(Boolean);
+
+        return { datasets, metric };
+      }
+
+      updateChart() {
+        const { datasets, metric } = this.getFilteredDatasets();
+
+        if (this.chart) {
+          this.chart.data.datasets = datasets;
+          this.chart.options.scales.y.title.text = METRIC_LABELS[metric];
+          this.chart.update('none');
+        } else {
+          this.chart = new Chart(this.els.canvas, {
+            type: 'line',
+            data: { datasets },
+            options: createChartOptions(METRIC_LABELS[metric]),
+          });
+        }
+      }
+
+      updateStats() {
+        const metric = this.els.metric.value;
+        const container = this.els.statsCards;
+        container.innerHTML = '';
+
+        if (this.allDates.length < 2) return;
+
+        const lastDate = this.allDates[this.allDates.length - 1];
+        const lastMs = new Date(lastDate).getTime();
+        const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+        const prevDate = [...this.allDates].reverse().find(d => lastMs - new Date(d).getTime() >= sevenDaysMs)
+          || this.allDates[0];
+
+        const cards = this.category.subreddits
+          .map(sub => {
+            const curr = this.allRows.find(r => r.date === lastDate && r.subreddit === sub.name);
+            if (!curr) return null;
+            const prev = this.allRows.find(r => r.date === prevDate && r.subreddit === sub.name);
+            const val = curr[metric];
+            const pct = prev ? ((val - prev[metric]) / prev[metric]) * 100 : null;
+            return { sub, val, pct };
+          })
+          .filter(Boolean)
+          .sort((a, b) => b.val - a.val);
+
+        for (const { sub, val, pct } of cards) {
+          const card = document.createElement('div');
+          card.className = 'stat-card';
+          card.style.setProperty('--agent-color', sub.color);
+          if (pct !== null) {
+            const dir = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
+            const arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '';
+            card.innerHTML = `
+              <div class="name">${sub.label}</div>
+              <div class="value">${formatValue(val)}</div>
+              <div class="change ${dir}">${arrow} ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</div>
+            `;
           } else {
-            activeAgents.add(key);
-            btn.classList.add('active');
+            card.innerHTML = `
+              <div class="name">${sub.label}</div>
+              <div class="value">${formatValue(val)}</div>
+              <div class="change flat">new</div>
+            `;
           }
-          updateChart();
-        });
-        container.appendChild(btn);
+          container.appendChild(card);
+        }
+
+        if (cards.length > 0) {
+          const label = document.createElement('div');
+          label.style.cssText = 'grid-column: 1 / -1; text-align: right; font-size: 0.75rem; color: #475569; margin-top: -0.25rem;';
+          label.textContent = `vs ${prevDate} (WoW)`;
+          container.appendChild(label);
+        }
       }
     }
 
     async function init() {
+      const sectionsContainer = document.getElementById('sections');
+      const pageLoading = document.getElementById('pageLoading');
+
       try {
-        const res = await fetch('reddit-stats.csv');
-        const text = await res.text();
-        allRows = parseCSV(text);
-        allDates = [...new Set(allRows.map(r => r.date))].sort();
+        const configRes = await fetch('subreddits.json');
+        if (!configRes.ok) throw new Error('Failed to load config');
+        const config = await configRes.json();
 
-        document.getElementById('loading').style.display = 'none';
+        pageLoading.style.display = 'none';
 
-        const dateFrom = document.getElementById('dateFrom');
-        const dateTo = document.getElementById('dateTo');
-        dateFrom.min = allDates[0];
-        dateFrom.max = allDates[allDates.length - 1];
-        dateTo.min = allDates[0];
-        dateTo.max = allDates[allDates.length - 1];
-        dateFrom.value = allDates[0];
-        dateTo.value = allDates[allDates.length - 1];
+        const sections = config.categories.map(cat => {
+          const section = new CategorySection(cat);
+          sectionsContainer.appendChild(section.container);
+          return section;
+        });
 
-        buildAgentToggles();
-
-        document.getElementById('metric').addEventListener('change', () => { updateChart(); updateStats(); });
-        document.getElementById('dateFrom').addEventListener('change', updateChart);
-        document.getElementById('dateTo').addEventListener('change', updateChart);
-
-        updateChart();
-        updateStats();
+        await Promise.allSettled(sections.map(s => s.load()));
       } catch (err) {
-        document.getElementById('loading').textContent = `Error: ${err.message}`;
+        pageLoading.textContent = `Error: ${err.message}`;
       }
     }
 

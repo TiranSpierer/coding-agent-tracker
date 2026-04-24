@@ -6,7 +6,7 @@ on:
       timezone: 'Asia/Jerusalem'
   push:
     branches: [main]
-    paths: [index.html, reddit-stats.csv, 'assets/**']
+    paths: [index.html, subreddits.json, 'data/**', 'assets/**']
   workflow_dispatch:
 
 permissions:
@@ -30,7 +30,8 @@ jobs:
         with:
           sparse-checkout: |
             index.html
-            reddit-stats.csv
+            subreddits.json
+            data/
             assets/
           sparse-checkout-cone-mode: false
 

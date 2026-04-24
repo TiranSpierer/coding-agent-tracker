@@ -24,12 +24,19 @@ jobs:
         run: npm ci
 
       - name: Run scraper
+        id: scrape
+        continue-on-error: true
         run: npm run scrape
         env:
           REDDIT_PROXY_URL: ${{ secrets.REDDIT_PROXY_URL }}
 
       - name: Commit and push results
+        if: always()
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "chore: Reddit stats ${{ github.run_id }}"
-          file_pattern: reddit-stats.csv
+          file_pattern: "data/*.csv"
+
+      - name: Fail if scraper had errors
+        if: steps.scrape.outcome == 'failure'
+        run: exit 1

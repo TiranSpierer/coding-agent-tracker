@@ -4,21 +4,9 @@ import * as dotenv from 'dotenv';
 
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
-const SUBREDDITS = [
-  'ClaudeCode',
-  'CLine',
-  'cursor',
-  'windsurf',
-  'GithubCopilot',
-  'google_antigravity',
-  'codex',
-  'RooCode',
-  'PiCodingAgent',
-];
-
-const OUTPUT_FILE = path.resolve(__dirname, '..', 'reddit-stats.csv');
-const WORKER_URL = process.env.REDDIT_PROXY_URL || 'http://localhost:8787';
-const HEADER = 'date,time_utc,subreddit,members,weekly_visitors,weekly_contributions';
+type SubredditEntry = { name: string; label: string; color: string };
+type Category = { id: string; name: string; description: string; subreddits: SubredditEntry[] };
+type Config = { categories: Category[] };
 
 type SubredditStats = {
   subreddit: string;
@@ -26,6 +14,19 @@ type SubredditStats = {
   weekly_visitors: number;
   weekly_contributions: number;
 };
+
+const CONFIG_PATH = path.resolve(__dirname, '..', 'subreddits.json');
+const DATA_DIR = path.resolve(__dirname, '..', 'data');
+const WORKER_URL = process.env.REDDIT_PROXY_URL || 'http://localhost:8787';
+const HEADER = 'date,time_utc,subreddit,members,weekly_visitors,weekly_contributions';
+
+function loadConfig(): Config {
+  return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+}
+
+function getCsvPath(categoryId: string): string {
+  return path.resolve(DATA_DIR, `${categoryId}.csv`);
+}
 
 async function fetchSubredditStats(sub: string): Promise<SubredditStats> {
   const res = await fetch(`${WORKER_URL}?sub=${sub}`);
@@ -53,14 +54,24 @@ function getLastBatch(filePath: string): Map<string, { weekly_visitors: number; 
 }
 
 async function main() {
+  const config = loadConfig();
   const now = new Date();
   const date = now.toISOString().split('T')[0];
   const time = now.toISOString().split('T')[1].split('.')[0];
 
-  console.log(`[${date} ${time} UTC] Fetching stats for ${SUBREDDITS.length} subreddits via worker...`);
+  // Flatten all subreddits across categories (deduped)
+  const allSubNames = new Set<string>();
+  for (const cat of config.categories) {
+    for (const sub of cat.subreddits) allSubNames.add(sub.name);
+  }
 
-  const results = await Promise.all(
-    SUBREDDITS.map(async (sub) => {
+  const allSubs = [...allSubNames];
+  console.log(`[${date} ${time} UTC] Fetching stats for ${allSubs.length} subreddits across ${config.categories.length} categories via worker...`);
+
+  // Fetch all in parallel
+  const resultsMap = new Map<string, SubredditStats>();
+  const fetchResults = await Promise.all(
+    allSubs.map(async (sub) => {
       try {
         const stats = await fetchSubredditStats(sub);
         const status = stats.weekly_visitors > 0 ? '✓' : '⚠ (no weekly stats)';
@@ -73,7 +84,10 @@ async function main() {
     })
   );
 
-  const needsRetry = results.filter(r => r.weekly_visitors === 0 && r.weekly_contributions === 0);
+  for (const r of fetchResults) resultsMap.set(r.subreddit, r);
+
+  // Retry those with zero weekly stats
+  const needsRetry = fetchResults.filter(r => r.weekly_visitors === 0 && r.weekly_contributions === 0);
   if (needsRetry.length > 0) {
     console.log(`\nRetrying ${needsRetry.length} subreddits sequentially...`);
     for (const entry of needsRetry) {
@@ -85,6 +99,7 @@ async function main() {
           entry.weekly_visitors = stats.weekly_visitors;
           entry.weekly_contributions = stats.weekly_contributions;
           if (stats.members > 0) entry.members = stats.members;
+          resultsMap.set(entry.subreddit, entry);
         } else {
           console.log(`  ⚠ r/${entry.subreddit}: still no weekly stats`);
         }
@@ -94,53 +109,76 @@ async function main() {
     }
   }
 
-  // Fail if any subreddit has a zero in any stat
-  const broken = results.filter(r => r.members === 0 || r.weekly_visitors === 0 || r.weekly_contributions === 0);
-  if (broken.length > 0) {
-    console.error(`\n✗ ERROR: ${broken.length} subreddit(s) have zero stats:`);
-    broken.forEach(r => console.error(`  - r/${r.subreddit}: members=${r.members} visitors=${r.weekly_visitors} contributions=${r.weekly_contributions}`));
-    console.error('\nReddit likely changed their challenge or blocked the Worker. See docs/ARCHITECTURE.md for troubleshooting.');
+  // Ensure data directory exists
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+  // Process each category independently
+  const failedCategories: string[] = [];
+
+  for (const category of config.categories) {
+    console.log(`\n─── ${category.name} ───`);
+
+    const catResults = category.subreddits
+      .map(s => resultsMap.get(s.name))
+      .filter((r): r is SubredditStats => r !== undefined);
+
+    // Validate: any zero stats = category failure
+    const broken = catResults.filter(r => r.members === 0 || r.weekly_visitors === 0 || r.weekly_contributions === 0);
+    if (broken.length > 0) {
+      console.error(`✗ ${broken.length} subreddit(s) have zero stats:`);
+      broken.forEach(r => console.error(`  - r/${r.subreddit}: members=${r.members} visitors=${r.weekly_visitors} contributions=${r.weekly_contributions}`));
+      failedCategories.push(category.id);
+      continue;
+    }
+
+    // Dedup check against this category's CSV
+    const csvPath = getCsvPath(category.id);
+    const lastBatch = getLastBatch(csvPath);
+
+    if (lastBatch.size > 0) {
+      const hasNewSubs = catResults.some(r => !lastBatch.has(r.subreddit));
+      const allChanged = catResults.every(r => {
+        const prev = lastBatch.get(r.subreddit);
+        if (!prev) return true;
+        return prev.weekly_visitors !== r.weekly_visitors || prev.weekly_contributions !== r.weekly_contributions;
+      });
+
+      if (!hasNewSubs && !allChanged) {
+        console.log('⏭ Weekly stats unchanged — skipping CSV write.');
+        continue;
+      }
+      if (hasNewSubs) console.log('🆕 New subreddit(s) detected — appending batch.');
+      else console.log('📊 Weekly stats changed — appending new batch.');
+    }
+
+    const sorted = catResults.sort((a, b) => b.weekly_visitors - a.weekly_visitors);
+
+    sorted.forEach(({ subreddit, members, weekly_visitors, weekly_contributions }, i) => {
+      console.log(
+        `  #${i + 1} r/${subreddit.padEnd(20)} members: ${String(members).padStart(7)} | weekly_visitors: ${String(weekly_visitors).padStart(7)} | weekly_contributions: ${String(weekly_contributions).padStart(6)}`
+      );
+    });
+
+    const newRows = sorted.map(({ subreddit, members, weekly_visitors, weekly_contributions }) =>
+      `${date},${time},${subreddit},${members},${weekly_visitors},${weekly_contributions}`
+    );
+
+    if (!fs.existsSync(csvPath)) {
+      fs.writeFileSync(csvPath, [HEADER, ...newRows].join('\n') + '\n');
+    } else {
+      fs.appendFileSync(csvPath, newRows.join('\n') + '\n');
+    }
+
+    console.log(`✓ Stats appended to ${csvPath}`);
+  }
+
+  if (failedCategories.length > 0) {
+    console.error(`\n✗ ERROR: Failed categories: ${failedCategories.join(', ')}`);
+    console.error('Reddit likely changed their challenge or blocked the Worker. See docs/TROUBLESHOOTING.md');
     process.exit(1);
   }
 
-  // Dedup: only append if ALL subreddits have changed, or new subreddits appeared
-  const lastBatch = getLastBatch(OUTPUT_FILE);
-  if (lastBatch.size > 0) {
-    const hasNewSubs = results.some(r => !lastBatch.has(r.subreddit));
-    const allChanged = results.every(r => {
-      const prev = lastBatch.get(r.subreddit);
-      if (!prev) return true;
-      return prev.weekly_visitors !== r.weekly_visitors || prev.weekly_contributions !== r.weekly_contributions;
-    });
-
-    if (!hasNewSubs && !allChanged) {
-      console.log('\n⏭ Weekly stats unchanged — skipping CSV write.');
-      return;
-    }
-    if (hasNewSubs) console.log('\n🆕 New subreddit(s) detected — appending batch.');
-    else console.log('\n📊 Weekly stats changed — appending new batch.');
-  }
-
-  const sorted = results.sort((a, b) => b.weekly_visitors - a.weekly_visitors);
-
-  console.log('\n======= RANKING =======');
-  sorted.forEach(({ subreddit, members, weekly_visitors, weekly_contributions }, i) => {
-    console.log(
-      `#${i + 1} r/${subreddit.padEnd(20)} members: ${String(members).padStart(7)} | weekly_visitors: ${String(weekly_visitors).padStart(7)} | weekly_contributions: ${String(weekly_contributions).padStart(6)}`
-    );
-  });
-
-  const newRows = sorted.map(({ subreddit, members, weekly_visitors, weekly_contributions }) =>
-    `${date},${time},${subreddit},${members},${weekly_visitors},${weekly_contributions}`
-  );
-
-  if (!fs.existsSync(OUTPUT_FILE)) {
-    fs.writeFileSync(OUTPUT_FILE, [HEADER, ...newRows].join('\n') + '\n');
-  } else {
-    fs.appendFileSync(OUTPUT_FILE, newRows.join('\n') + '\n');
-  }
-
-  console.log(`\n✓ Stats appended to ${OUTPUT_FILE}`);
+  console.log('\n✓ All categories processed successfully.');
 }
 
 main();
