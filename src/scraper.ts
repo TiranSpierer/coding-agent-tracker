@@ -86,27 +86,45 @@ async function main() {
 
   for (const r of fetchResults) resultsMap.set(r.subreddit, r);
 
-  // Retry those with zero weekly stats
-  const needsRetry = fetchResults.filter(r => r.weekly_visitors === 0 && r.weekly_contributions === 0);
-  if (needsRetry.length > 0) {
-    console.log(`\nRetrying ${needsRetry.length} subreddits sequentially...`);
+  // Retry with exponential backoff: 2min, 4min, 8min
+  const RETRY_DELAYS = [2 * 60, 4 * 60, 8 * 60];
+  let needsRetry = fetchResults.filter(r =>
+    r.members === 0 || r.weekly_visitors === 0 || r.weekly_contributions === 0
+  );
+
+  for (let attempt = 0; attempt < RETRY_DELAYS.length && needsRetry.length > 0; attempt++) {
+    const delaySec = RETRY_DELAYS[attempt];
+    console.log(`\nRetry ${attempt + 1}/${RETRY_DELAYS.length}: waiting ${delaySec / 60}min before retrying ${needsRetry.length} subreddit(s)...`);
+    await new Promise(r => setTimeout(r, delaySec * 1000));
+
     for (const entry of needsRetry) {
-      await new Promise(r => setTimeout(r, 1000));
       try {
         const stats = await fetchSubredditStats(entry.subreddit);
-        if (stats.weekly_visitors > 0 || stats.weekly_contributions > 0) {
-          console.log(`  ✓ r/${entry.subreddit}: visitors=${stats.weekly_visitors} contributions=${stats.weekly_contributions}`);
-          entry.weekly_visitors = stats.weekly_visitors;
-          entry.weekly_contributions = stats.weekly_contributions;
+        const fixed = (entry.members === 0 && stats.members > 0) ||
+          (entry.weekly_visitors === 0 && stats.weekly_visitors > 0) ||
+          (entry.weekly_contributions === 0 && stats.weekly_contributions > 0);
+        if (fixed) {
           if (stats.members > 0) entry.members = stats.members;
+          if (stats.weekly_visitors > 0) entry.weekly_visitors = stats.weekly_visitors;
+          if (stats.weekly_contributions > 0) entry.weekly_contributions = stats.weekly_contributions;
           resultsMap.set(entry.subreddit, entry);
+          console.log(`  ✓ r/${entry.subreddit}: members=${entry.members} visitors=${entry.weekly_visitors} contributions=${entry.weekly_contributions}`);
         } else {
-          console.log(`  ⚠ r/${entry.subreddit}: still no weekly stats`);
+          console.log(`  ⚠ r/${entry.subreddit}: still has zeros`);
         }
       } catch (err) {
         console.log(`  ✗ r/${entry.subreddit}: ${err}`);
       }
     }
+
+    needsRetry = needsRetry.filter(r =>
+      r.members === 0 || r.weekly_visitors === 0 || r.weekly_contributions === 0
+    );
+  }
+
+  if (needsRetry.length > 0) {
+    console.log(`\n⚠ ${needsRetry.length} subreddit(s) still have zeros after all retries:`);
+    needsRetry.forEach(r => console.log(`  - r/${r.subreddit}: members=${r.members} visitors=${r.weekly_visitors} contributions=${r.weekly_contributions}`));
   }
 
   // Ensure data directory exists
